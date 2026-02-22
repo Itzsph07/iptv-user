@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "sdkVersion": "54.0.0",
+    "ios": {
+      "deploymentTarget": "15.1",
+      "supportsTablet": true
+    },
+    "android": {
+      "targetSdkVersion": 34,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.anonymous.MesaIPTV"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

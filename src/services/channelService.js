@@ -1,0 +1,505 @@
+// services/channelService.js  –  FIXED v3
+// Fixes:
+//  1. Xtream URLs cleaned (no ?stream= appended)
+//  2. ONE /get-stream call per play session (not 8)
+//  3. Platform-aware strategy order
+
+import api      from './api';
+import { Platform } from 'react-native';
+
+class ChannelService {
+
+  // ─── Public API ──────────────────────────────────────────────────────────
+
+async getMyChannels() {
+    try {
+        const r = await api.get('/customers/my-channels');
+        const channels = r.data.channels || [];
+        
+        // ★★★ ADD THIS DEBUG LOG ★★★
+        console.log('Channels received from backend:', channels.length);
+        if (channels.length > 0) {
+            console.log('Sample channel:', {
+                name: channels[0].name,
+                hasMacAddress: !!channels[0].macAddress,
+                macAddress: channels[0].macAddress
+            });
+        }
+        
+        return channels;
+    } catch (e) { 
+        console.error('getMyChannels:', e); 
+        throw e; 
+    }
+}
+
+  async getMyPlaylist() {
+    try {
+      const r = await api.get('/customers/my-playlist');
+      return r.data.playlist || [];
+    } catch (e) { console.error('getMyPlaylist:', e); throw e; }
+  }
+
+  
+
+  // ─── Get ONE fresh URL from backend ──────────────────────────────────────
+
+ // ─── Get ONE fresh URL from backend ──────────────────────────────────────
+async getChannelStream(channel) {
+  if (channel.cmd || channel.channelId) {
+    try {
+      console.log('🔄 Requesting stream URL for:', channel.name);
+      
+      // Try the fast token method first
+      try {
+        console.log('🚀 Attempting fast token method...');
+        const tokenResponse = await api.post('/channels/get-stalker-token', {
+          playlistId: channel.playlistId
+        });
+        
+        if (tokenResponse.data?.token) {
+          const freshToken = tokenResponse.data.token;
+          console.log('✅ Got fresh token:', freshToken);
+          
+          const cmdString = String(channel.cmd || channel.url || '');
+          const baseMatch = cmdString.match(/(https?:\/\/[^\/]+)/);
+          
+          if (baseMatch) {
+            const baseServer = baseMatch[1];
+            
+            // Check if it's live.php format (MAG-style)
+            if (cmdString.includes('live.php')) {
+              const urlObj = new URL(baseServer + '/play/live.php');
+              urlObj.searchParams.set('mac', channel.macAddress || '');
+              urlObj.searchParams.set('stream', channel.channelId || channel._id);
+              urlObj.searchParams.set('extension', 'ts');
+              urlObj.searchParams.set('play_token', freshToken);
+              
+              console.log('📡 Generated MAG URL:', urlObj.toString());
+              return urlObj.toString();
+            } else {
+              // Xtream format
+              const usernameMatch = cmdString.match(/https?:\/\/[^\/]+\/([^\/]+)/);
+              const username = usernameMatch ? usernameMatch[1] : null;
+              
+              if (username) {
+                const url = `${baseServer}/${username}/${freshToken}/${channel.channelId || channel._id}.ts`;
+                console.log('⚡ Generated Xtream URL:', url);
+                return url;
+              }
+            }
+          }
+        }
+      } catch (tokenError) {
+        console.log('⚠️ Fast token method failed:', tokenError.message);
+      }
+      
+      // Fall back to old method
+      console.log('🔄 Falling back to old /get-stream endpoint');
+      const r = await api.post('/channels/get-stream', {
+        playlistId: channel.playlistId,
+        channelId:  channel.channelId,
+        cmd:        channel.cmd || '',
+      });
+      
+      if (r.data?.url) {
+        console.log('✅ Stream URL from old method:', r.data.url);
+        return r.data.url;
+      }
+      
+    } catch (e) {
+      console.error('❌ get-stream failed:', e.message);
+      const extracted = this._extractUrl(channel.cmd);
+      if (extracted) { 
+        console.warn('⚠️ Using stored URL from cmd'); 
+        return extracted; 
+      }
+    }
+  }
+  
+  console.warn('⚠️ Using channel.url as last resort');
+  return channel.url;
+}
+  // Add this to channelService.js
+
+/**
+ * ULTRA FAST method for Stalker portals
+ * Only does handshake, NO channel sync!
+ */
+async getStalkerStreamFast(channel) {
+  try {
+    console.log('🚀 Fast Stalker stream for:', channel.name);
+    
+    // 1. Get playlist info
+    const playlist = await this._getPlaylistInfo(channel.playlistId);
+    if (!playlist) throw new Error('No playlist info');
+    
+    // 2. Do a SINGLE handshake to get fresh token (NO channel sync!)
+    const token = await this._doStalkerHandshake(
+      playlist.sourceUrl,
+      playlist.macAddress
+    );
+    
+    if (!token) throw new Error('No token from handshake');
+    
+    console.log('✅ Got fresh token:', token);
+    
+    // 3. Extract base server from the stored cmd
+    // From: ffmpeg http://i511hq.xyz:80/5DSXY772RZRL3WV/uRkVsYQrD1/1338445
+    // We need: http://i511hq.xyz:80
+    const baseServer = this._extractBaseServer(channel.cmd);
+    
+    if (!baseServer) throw new Error('Could not extract base server');
+    
+    // 4. Get username from playlist or extract from cmd
+    const username = playlist.xtreamUsername || this._extractUsername(channel.cmd);
+    
+    // 5. Build the URL with the FRESH token
+    const streamUrl = `${baseServer}/${username}/${token}/${channel.channelId}.ts`;
+    
+    console.log('✅ Generated stream URL with fresh token:', streamUrl);
+    return streamUrl;
+    
+  } catch (error) {
+    console.error('❌ Fast stream failed:', error);
+    // Fall back to old method
+    return this.getChannelStream(channel);
+  }
+}
+
+/**
+ * Do ONLY handshake - NO channel sync!
+ * Returns fresh token
+ */
+async _doStalkerHandshake(baseUrl, macAddress) {
+  try {
+    console.log('🤝 Doing fast handshake only...');
+    
+    // Try different portal paths
+    const paths = ['/portal.php', '/c/portal.php', '/server/load.php', '/c/server/load.php'];
+    
+    for (const path of paths) {
+      try {
+        const handshakeUrl = `${baseUrl}${path}`;
+        console.log(`Trying handshake at: ${handshakeUrl}`);
+        
+        const response = await api.get(handshakeUrl, {
+          params: {
+            type: 'stb',
+            action: 'handshake',
+            token: '',
+            JsHttpRequest: '1-xml'
+          },
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200',
+            'Cookie': `mac=${macAddress}; stb_lang=en; timezone=GMT`,
+          },
+          timeout: 5000
+        });
+        
+        // Parse the response (might be JavaScript wrapped)
+        const data = this._parseStalkerResponse(response.data);
+        
+        if (data?.js?.token) {
+          console.log(`✅ Got token from ${path}:`, data.js.token);
+          return data.js.token;
+        }
+        if (data?.token) {
+          console.log(`✅ Got token from ${path}:`, data.token);
+          return data.token;
+        }
+      } catch (e) {
+        console.log(`Path ${path} failed:`, e.message);
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Handshake failed:', error);
+    return null;
+  }
+}
+
+/**
+ * Extract base server from cmd
+ * From: ffmpeg http://i511hq.xyz:80/5DSXY772RZRL3WV/uRkVsYQrD1/1338445
+ * To:   http://i511hq.xyz:80
+ */
+_extractBaseServer(cmd) {
+  const match = String(cmd || '').match(/(https?:\/\/[^\/]+)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Extract username from cmd
+ * From: ffmpeg http://i511hq.xyz:80/5DSXY772RZRL3WV/uRkVsYQrD1/1338445
+ * To:   5DSXY772RZRL3WV
+ */
+_extractUsername(cmd) {
+  const match = String(cmd || '').match(/https?:\/\/[^\/]+\/([^\/]+)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Parse Stalker's JavaScript-wrapped JSON response
+ */
+_parseStalkerResponse(data) {
+  if (typeof data !== 'string') return data;
+  
+  // Remove JavaScript wrapper: stbHandshake({...});
+  const match = data.match(/^\w+\(({.*})\);?$/s);
+  if (match) {
+    try {
+      return JSON.parse(match[1]);
+    } catch (e) {}
+  }
+  
+  // Try direct JSON parse
+  try {
+    return JSON.parse(data);
+  } catch (e) {}
+  
+  return { js: data };
+}
+
+// Helper to get playlist info
+async _getPlaylistInfo(playlistId) {
+  try {
+    const response = await api.get(`/playlists/${playlistId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Failed to get playlist info:', error);
+    return null;
+  }
+}
+  // ─── Build all strategies (ONE network call) ──────────────────────────────
+
+  async getStreamWithAllStrategies(channel) {
+    console.log('📋 Building streaming strategies for:', channel.name);
+
+    // ★ Single network call
+    const freshUrl = await this.getChannelStream(channel);
+    if (!freshUrl) throw new Error('Could not obtain stream URL');
+
+    // Clean the URL
+    let uri = this._cleanUrl(freshUrl) || freshUrl;
+
+    // Xtream URLs must NOT have ?stream= or any query params appended.
+    // Also: use string ops NOT new URL() to preserve explicit port (e.g. :80)
+    if (this._isXtreamUrl(uri)) {
+      uri = uri.split('?')[0].split('#')[0].replace(/\/$/, '');
+      if (!/\.(ts|m3u8|mp4)$/i.test(uri)) uri += '.ts';
+      console.log('🔗 Xtream URL (cleaned):', uri);
+    } else {
+      console.log('🔗 Using URI:', uri);
+    }
+
+    const mac    = channel.macAddress || '00:1A:79:00:00:00';
+    const domain = this._baseDomain(uri) || '';
+    const creds  = this._credsFromUrl(uri);
+
+    const strategies = Platform.OS === 'android'
+      ? this._android(uri, mac, domain, creds)
+      : this._ios(uri, mac, domain, creds);
+
+    strategies.forEach((s, i) =>
+      console.log(`  ✅ Strategy ${i + 1}: ${s.strategyName}`)
+    );
+    console.log(`📊 ${strategies.length} strategies ready`);
+    return strategies;
+  }
+
+  // ─── Strategy sets ────────────────────────────────────────────────────────
+
+  _android(uri, mac, domain, creds) {
+    return [
+      {
+        strategyName: 'Android ExoPlayer',
+        headers: {
+          'User-Agent':      'ExoPlayer/2.18.1 (Linux; Android 10) ExoPlayerLib/2.18.1',
+          'Accept':          'video/mp2t, application/vnd.apple.mpegurl, video/*, */*',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'identity',
+          'Connection':      'keep-alive',
+        },
+      },
+      {
+        strategyName: 'OTT Navigator',
+        headers: {
+          'User-Agent':      'OTT Navigator/1.6.7 (Linux; Android 10)',
+          'Accept':          '*/*',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'identity',
+          'Connection':      'keep-alive',
+          ...(creds && { 'Authorization': `Basic ${this._b64(`${creds.u}:${creds.p}`)}` }),
+        },
+      },
+      {
+        strategyName: 'IPTV Smarters',
+        headers: {
+          'User-Agent':      'IPTV Smarters/3.0 (Android; 10)',
+          'Accept':          'video/mp2t, application/vnd.apple.mpegurl, */*',
+          'Accept-Encoding': 'identity',
+          'Connection':      'keep-alive',
+        },
+      },
+      {
+        strategyName: 'VLC Compatible',
+        headers: {
+          'User-Agent':      'VLC/3.0.18 LibVLC/3.0.18',
+          'Accept':          'video/mp2t, video/quicktime, video/*, */*',
+          'Accept-Language': 'en-US,*',
+          'Accept-Encoding': 'identity',
+          'Connection':      'keep-alive',
+          'Icy-MetaData':    '1',
+          'Range':           'bytes=0-',
+        },
+      },
+      {
+        strategyName: 'MAG Device',
+        headers: {
+          'User-Agent':    'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
+          'X-User-Agent':  'Model: MAG250; Link: WiFi',
+          'Accept':        '*/*',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'identity',
+          'Connection':    'keep-alive',
+          'Cookie':        `mac=${mac}; stb_lang=en; timezone=GMT`,
+          ...(domain && { 'Referer': `${domain}/c/` }),
+        },
+      },
+      {
+        strategyName: 'Basic Auth',
+        headers: {
+          'User-Agent':      'Lavf/58.76.100',
+          'Accept':          'video/mp2t, */*',
+          'Accept-Encoding': 'identity',
+          'Connection':      'keep-alive',
+          ...(creds && { 'Authorization': `Basic ${this._b64(`${creds.u}:${creds.p}`)}` }),
+        },
+      },
+      {
+        strategyName: 'Chrome Browser',
+        headers: {
+          'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept':          '*/*',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'identity',
+          'Connection':      'keep-alive',
+          ...(domain && { 'Referer': `${domain}/`, 'Origin': domain }),
+        },
+      },
+      {
+        strategyName: 'Simple Stream',
+        headers: { 'User-Agent': 'ExoPlayer/2.18.1', 'Accept': '*/*' },
+      },
+    ].map((s, i) => ({ ...s, uri, strategyId: i + 1 }));
+  }
+
+  _ios(uri, mac, domain, creds) {
+    return [
+      {
+        strategyName: 'VLC Compatible',
+        headers: {
+          'User-Agent':      'VLC/3.0.18 LibVLC/3.0.18',
+          'Accept':          'video/mp2t, video/quicktime, video/*, */*',
+          'Accept-Language': 'en-US,*',
+          'Accept-Encoding': 'identity',
+          'Connection':      'keep-alive',
+          'Icy-MetaData':    '1',
+        },
+      },
+      {
+        strategyName: 'Chrome Browser',
+        headers: {
+          'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept':          '*/*',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'identity',
+          'Connection':      'keep-alive',
+          ...(domain && { 'Referer': `${domain}/`, 'Origin': domain }),
+        },
+      },
+      {
+        strategyName: 'MAG Device',
+        headers: {
+          'User-Agent':    'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200 stbapp ver: 2 rev: 250 Safari/533.3',
+          'X-User-Agent':  'Model: MAG250; Link: WiFi',
+          'Accept':        '*/*',
+          'Accept-Encoding': 'identity',
+          'Cookie':        `mac=${mac}; stb_lang=en; timezone=GMT`,
+          ...(domain && { 'Referer': `${domain}/c/` }),
+        },
+      },
+      {
+        strategyName: 'Simple Stream',
+        headers: { 'User-Agent': 'AppleCoreMedia/1.0', 'Accept': '*/*' },
+      },
+    ].map((s, i) => ({ ...s, uri, strategyId: i + 1 }));
+  }
+
+  // ─── Private helpers ──────────────────────────────────────────────────────
+
+  /**
+   * True for  http://host:port/user/pass/12345[.ts]
+   * Uses regex NOT new URL() — URL constructor strips port 80 → 404 on Xtream servers
+   */
+  _isXtreamUrl(url) {
+    if (!url) return false;
+    const base  = url.split('?')[0].split('#')[0];
+    const m     = base.match(/^https?:\/\/[^/]+(\/.*)?$/);
+    if (!m) return false;
+    const parts = (m[1] || '').split('/').filter(Boolean);
+    const last  = parts[parts.length - 1] || '';
+    return parts.length === 3 && /^\d+(\.(ts|m3u8|mp4))?$/i.test(last);
+  }
+
+  _extractUrl(raw) {
+    if (!raw) return null;
+    const s = String(raw).replace(/^ff(mpeg|rt)\s+/i, '').replace(/[\t\n\r]/g, '').trim();
+    const m = s.match(/https?:\/\/\S+/);
+    return m ? m[0] : null;
+  }
+
+  _cleanUrl(url) {
+    if (!url) return null;
+    return String(url).replace(/^ff(mpeg|rt)\s+/i, '').replace(/[\t\n\r]/g, '').trim();
+  }
+
+  _baseDomain(url) {
+    try { const u = new URL(url); return `${u.protocol}//${u.host}`; } catch (_) { return null; }
+  }
+
+  _credsFromUrl(url) {
+    try {
+      const parts = new URL(url).pathname.split('/').filter(Boolean);
+      if (parts.length >= 2 && !/^\d+$/.test(parts[0])) {
+        return { u: parts[0], p: parts[1] };
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  _b64(str) {
+    try { return btoa(str); } catch (_) { return Buffer.from(str).toString('base64'); }
+  }
+
+  // ─── Utility ──────────────────────────────────────────────────────────────
+
+  groupChannelsByCategory(channels) {
+    if (!Array.isArray(channels)) return {};
+    return channels.reduce((acc, ch) => {
+      const g = ch.group || 'Uncategorized';
+      (acc[g] = acc[g] || []).push(ch);
+      return acc;
+    }, {});
+  }
+
+  searchChannels(channels, query) {
+    if (!query || !Array.isArray(channels)) return channels || [];
+    const q = query.toLowerCase();
+    return channels.filter(ch => ch.name?.toLowerCase().includes(q));
+  }
+}
+
+export default new ChannelService();

@@ -1,0 +1,61 @@
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const API_URL = 'http://192.168.100.230:5000/api'; //phone 35 // pc 230
+
+console.log('API URL configured:', API_URL);
+
+const api = axios.create({
+    baseURL: API_URL,
+    timeout: 30000,
+    headers: {
+        'Content-Type': 'application/json',
+    }
+});
+
+// Request interceptor with logging
+api.interceptors.request.use(
+    async (config) => {
+        console.log(`Making ${config.method.toUpperCase()} request to:`, config.baseURL + config.url);
+        console.log('Request data:', config.data);
+        
+        const token = await AsyncStorage.getItem('@IPTV:token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+            console.log('Token added to request');
+        }
+        return config;
+    },
+    (error) => {
+        console.error('Request error:', error);
+        return Promise.reject(error);
+    }
+);
+
+// Response interceptor with logging
+api.interceptors.response.use(
+    (response) => {
+        console.log('Response received:', {
+            status: response.status,
+            data: response.data
+        });
+        return response;
+    },
+    async (error) => {
+        console.error('Response error:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status,
+            headers: error.response?.headers
+        });
+        
+        if (error.response?.status === 401) {
+            console.log('Unauthorized access - clearing storage');
+            await AsyncStorage.multiRemove(['@IPTV:user', '@IPTV:token']);
+        }
+        
+        return Promise.reject(error);
+    }
+);
+
+export default api;
