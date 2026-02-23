@@ -120,28 +120,34 @@ const handleRefresh = useCallback(async () => {
   }
 }, [searchQuery]);
 
+  // ★★★ FIXED: Handle channel press with force reset ★★★
   const handleChannelPress = useCallback((channel) => {
-    const channelId = channel.channelId || channel._id;
+    navigation.replace('Player', { channel });
     const now = Date.now();
     
     if (now - lastTapTime.current < DOUBLE_TAP_MS) {
       lastTapTime.current = 0;
       navigation.navigate('Home', { 
         channel, 
-        startFullscreen: true
+        startFullscreen: true,
+        forceReset: Date.now() // Force Video component reset
       });
     } 
     else if (channelId === currentChannelId) {
       lastTapTime.current = now;
       navigation.navigate('Home', { 
         channel, 
-        startFullscreen: true
+        startFullscreen: true,
+        forceReset: Date.now() // Force Video component reset
       });
     } 
     else {
       lastTapTime.current = now;
       setCurrentChannelId(channelId);
-      navigation.navigate('Home', { channel });
+      navigation.navigate('Home', { 
+        channel,
+        forceReset: Date.now() // Force Video component reset
+      });
     }
   }, [navigation, currentChannelId]);
 

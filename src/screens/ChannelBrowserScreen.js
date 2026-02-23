@@ -22,6 +22,7 @@ export default function ChannelBrowserScreen({
   const [sections,      setSections]      = useState([]);
   const [selectedGenre, setSelectedGenre] = useState(null);
   const [loading,       setLoading]       = useState(true);
+  const [isSelecting,   setIsSelecting]   = useState(false);
 
 // ── Load channels — Sort alphabetically ─────────────────────────
 useEffect(() => {
@@ -66,6 +67,33 @@ useEffect(() => {
     return sections.find(s => s.title === selectedGenre)?.data ?? [];
   }, [selectedGenre, sections, allChannels]);
 
+  // ★★★ FIXED: Handle channel selection with force reset ★★★
+  const handleChannelPress = useCallback((channel) => {
+    if (onChannelSelect) {
+      // Call the original onChannelSelect
+      onChannelSelect(channel);
+    } else {
+      // Navigate directly with force reset
+      navigation.navigate('Home', { 
+        channel, 
+        forceReset: Date.now() 
+      });
+    }
+  }, [onChannelSelect, navigation]);
+
+  const handleChannelSelect = useCallback(async (channel) => {
+  if (isSelecting) return; // Prevent double clicks
+  setIsSelecting(true);
+  
+  try {
+    await onChannelSelect(channel);
+  } finally {
+    // Reset after a delay
+    setTimeout(() => setIsSelecting(false), 3000);
+  }
+}, [onChannelSelect, isSelecting]);
+
+
   const renderGenre = useCallback(({ item }) => {
     const active = selectedGenre === item.title;
     return (
@@ -86,10 +114,11 @@ useEffect(() => {
     const id      = item.channelId || item._id;
     const active  = id === currentChannelId;
     const isLast  = id === lastChannelId && !active;
+    
     return (
       <TouchableOpacity
         style={[styles.channelItem, active && styles.channelActive]}
-        onPress={() => onChannelSelect(item)}
+        onPress={() => handleChannelSelect(item)} // ← Use the new handler
         activeOpacity={0.7}
       >
         {item.logo
@@ -103,7 +132,8 @@ useEffect(() => {
         {isLast && <Ionicons name="time-outline" size={10} color="#f90" style={{ marginLeft: 4 }} />}
       </TouchableOpacity>
     );
-  }, [currentChannelId, lastChannelId, onChannelSelect]);
+    
+  }, [currentChannelId, lastChannelId, handleChannelPress]);
 
   if (loading) {
     return (

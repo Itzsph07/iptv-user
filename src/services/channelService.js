@@ -1,8 +1,8 @@
-// services/channelService.js  –  FIXED v3
+// services/channelService.js – SIMPLIFIED VERSION
 // Fixes:
-//  1. Xtream URLs cleaned (no ?stream= appended)
-//  2. ONE /get-stream call per play session (not 8)
-//  3. Platform-aware strategy order
+//  1. No sync calls - backend handles token refresh automatically
+//  2. Clean URL construction without extra complexity
+//  3. Proper Xtream/MAG URL detection
 
 import api      from './api';
 import { Platform } from 'react-native';
@@ -11,18 +11,20 @@ class ChannelService {
 
   // ─── Public API ──────────────────────────────────────────────────────────
 
-async getMyChannels() {
+  async getMyChannels() {
     try {
         const r = await api.get('/customers/my-channels');
         const channels = r.data.channels || [];
         
-        // ★★★ ADD THIS DEBUG LOG ★★★
         console.log('Channels received from backend:', channels.length);
         if (channels.length > 0) {
             console.log('Sample channel:', {
                 name: channels[0].name,
                 hasMacAddress: !!channels[0].macAddress,
-                macAddress: channels[0].macAddress
+                macAddress: channels[0].macAddress,
+                hasStreamingToken: !!channels[0].streamingToken,
+                hasStreamUrl: !!channels[0].streamUrl,
+                hasSourcePlaylist: !!channels[0].sourcePlaylist
             });
         }
         
@@ -31,7 +33,7 @@ async getMyChannels() {
         console.error('getMyChannels:', e); 
         throw e; 
     }
-}
+  }
 
   async getMyPlaylist() {
     try {
@@ -40,252 +42,49 @@ async getMyChannels() {
     } catch (e) { console.error('getMyPlaylist:', e); throw e; }
   }
 
-  
-
   // ─── Get ONE fresh URL from backend ──────────────────────────────────────
 
- // ─── Get ONE fresh URL from backend ──────────────────────────────────────
-async getChannelStream(channel) {
-  if (channel.cmd || channel.channelId) {
-    try {
-      console.log('🔄 Requesting stream URL for:', channel.name);
-      
-      // Try the fast token method first
+  async getChannelStream(channel) {
+    if (channel.cmd || channel.channelId) {
       try {
-        console.log('🚀 Attempting fast token method...');
-        const tokenResponse = await api.post('/channels/get-stalker-token', {
-          playlistId: channel.playlistId
+        console.log('🔄 Requesting stream URL for:', channel.name);
+        
+        // Single call to get-stream endpoint
+        const r = await api.post('/channels/get-stream', {
+          playlistId: channel.playlistId,
+          channelId:  channel.channelId,
+          cmd:        channel.cmd || '',
         });
         
-        if (tokenResponse.data?.token) {
-          const freshToken = tokenResponse.data.token;
-          console.log('✅ Got fresh token:', freshToken);
-          
-          const cmdString = String(channel.cmd || channel.url || '');
-          const baseMatch = cmdString.match(/(https?:\/\/[^\/]+)/);
-          
-          if (baseMatch) {
-            const baseServer = baseMatch[1];
-            
-            // Check if it's live.php format (MAG-style)
-            if (cmdString.includes('live.php')) {
-              const urlObj = new URL(baseServer + '/play/live.php');
-              urlObj.searchParams.set('mac', channel.macAddress || '');
-              urlObj.searchParams.set('stream', channel.channelId || channel._id);
-              urlObj.searchParams.set('extension', 'ts');
-              urlObj.searchParams.set('play_token', freshToken);
-              
-              console.log('📡 Generated MAG URL:', urlObj.toString());
-              return urlObj.toString();
-            } else {
-              // Xtream format
-              const usernameMatch = cmdString.match(/https?:\/\/[^\/]+\/([^\/]+)/);
-              const username = usernameMatch ? usernameMatch[1] : null;
-              
-              if (username) {
-                const url = `${baseServer}/${username}/${freshToken}/${channel.channelId || channel._id}.ts`;
-                console.log('⚡ Generated Xtream URL:', url);
-                return url;
-              }
-            }
-          }
+        if (r.data?.url) {
+          console.log('✅ Stream URL:', r.data.url);
+          return r.data.url;
         }
-      } catch (tokenError) {
-        console.log('⚠️ Fast token method failed:', tokenError.message);
-      }
-      
-      // Fall back to old method
-      console.log('🔄 Falling back to old /get-stream endpoint');
-      const r = await api.post('/channels/get-stream', {
-        playlistId: channel.playlistId,
-        channelId:  channel.channelId,
-        cmd:        channel.cmd || '',
-      });
-      
-      if (r.data?.url) {
-        console.log('✅ Stream URL from old method:', r.data.url);
-        return r.data.url;
-      }
-      
-    } catch (e) {
-      console.error('❌ get-stream failed:', e.message);
-      const extracted = this._extractUrl(channel.cmd);
-      if (extracted) { 
-        console.warn('⚠️ Using stored URL from cmd'); 
-        return extracted; 
-      }
-    }
-  }
-  
-  console.warn('⚠️ Using channel.url as last resort');
-  return channel.url;
-}
-  // Add this to channelService.js
-
-/**
- * ULTRA FAST method for Stalker portals
- * Only does handshake, NO channel sync!
- */
-async getStalkerStreamFast(channel) {
-  try {
-    console.log('🚀 Fast Stalker stream for:', channel.name);
-    
-    // 1. Get playlist info
-    const playlist = await this._getPlaylistInfo(channel.playlistId);
-    if (!playlist) throw new Error('No playlist info');
-    
-    // 2. Do a SINGLE handshake to get fresh token (NO channel sync!)
-    const token = await this._doStalkerHandshake(
-      playlist.sourceUrl,
-      playlist.macAddress
-    );
-    
-    if (!token) throw new Error('No token from handshake');
-    
-    console.log('✅ Got fresh token:', token);
-    
-    // 3. Extract base server from the stored cmd
-    // From: ffmpeg http://i511hq.xyz:80/5DSXY772RZRL3WV/uRkVsYQrD1/1338445
-    // We need: http://i511hq.xyz:80
-    const baseServer = this._extractBaseServer(channel.cmd);
-    
-    if (!baseServer) throw new Error('Could not extract base server');
-    
-    // 4. Get username from playlist or extract from cmd
-    const username = playlist.xtreamUsername || this._extractUsername(channel.cmd);
-    
-    // 5. Build the URL with the FRESH token
-    const streamUrl = `${baseServer}/${username}/${token}/${channel.channelId}.ts`;
-    
-    console.log('✅ Generated stream URL with fresh token:', streamUrl);
-    return streamUrl;
-    
-  } catch (error) {
-    console.error('❌ Fast stream failed:', error);
-    // Fall back to old method
-    return this.getChannelStream(channel);
-  }
-}
-
-/**
- * Do ONLY handshake - NO channel sync!
- * Returns fresh token
- */
-async _doStalkerHandshake(baseUrl, macAddress) {
-  try {
-    console.log('🤝 Doing fast handshake only...');
-    
-    // Try different portal paths
-    const paths = ['/portal.php', '/c/portal.php', '/server/load.php', '/c/server/load.php'];
-    
-    for (const path of paths) {
-      try {
-        const handshakeUrl = `${baseUrl}${path}`;
-        console.log(`Trying handshake at: ${handshakeUrl}`);
         
-        const response = await api.get(handshakeUrl, {
-          params: {
-            type: 'stb',
-            action: 'handshake',
-            token: '',
-            JsHttpRequest: '1-xml'
-          },
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3 (KHTML, like Gecko) MAG200',
-            'Cookie': `mac=${macAddress}; stb_lang=en; timezone=GMT`,
-          },
-          timeout: 5000
-        });
-        
-        // Parse the response (might be JavaScript wrapped)
-        const data = this._parseStalkerResponse(response.data);
-        
-        if (data?.js?.token) {
-          console.log(`✅ Got token from ${path}:`, data.js.token);
-          return data.js.token;
-        }
-        if (data?.token) {
-          console.log(`✅ Got token from ${path}:`, data.token);
-          return data.token;
-        }
       } catch (e) {
-        console.log(`Path ${path} failed:`, e.message);
+        console.error('❌ get-stream failed:', e.message);
+        const extracted = this._extractUrl(channel.cmd);
+        if (extracted) { 
+          console.warn('⚠️ Using stored URL from cmd'); 
+          return extracted; 
+        }
       }
     }
     
-    return null;
-  } catch (error) {
-    console.error('Handshake failed:', error);
-    return null;
+    console.warn('⚠️ Using channel.url as last resort');
+    return channel.url;
   }
-}
 
-/**
- * Extract base server from cmd
- * From: ffmpeg http://i511hq.xyz:80/5DSXY772RZRL3WV/uRkVsYQrD1/1338445
- * To:   http://i511hq.xyz:80
- */
-_extractBaseServer(cmd) {
-  const match = String(cmd || '').match(/(https?:\/\/[^\/]+)/);
-  return match ? match[1] : null;
-}
-
-/**
- * Extract username from cmd
- * From: ffmpeg http://i511hq.xyz:80/5DSXY772RZRL3WV/uRkVsYQrD1/1338445
- * To:   5DSXY772RZRL3WV
- */
-_extractUsername(cmd) {
-  const match = String(cmd || '').match(/https?:\/\/[^\/]+\/([^\/]+)/);
-  return match ? match[1] : null;
-}
-
-/**
- * Parse Stalker's JavaScript-wrapped JSON response
- */
-_parseStalkerResponse(data) {
-  if (typeof data !== 'string') return data;
-  
-  // Remove JavaScript wrapper: stbHandshake({...});
-  const match = data.match(/^\w+\(({.*})\);?$/s);
-  if (match) {
-    try {
-      return JSON.parse(match[1]);
-    } catch (e) {}
-  }
-  
-  // Try direct JSON parse
-  try {
-    return JSON.parse(data);
-  } catch (e) {}
-  
-  return { js: data };
-}
-
-// Helper to get playlist info
-async _getPlaylistInfo(playlistId) {
-  try {
-    const response = await api.get(`/playlists/${playlistId}`);
-    return response.data;
-  } catch (error) {
-    console.error('Failed to get playlist info:', error);
-    return null;
-  }
-}
   // ─── Build all strategies (ONE network call) ──────────────────────────────
 
   async getStreamWithAllStrategies(channel) {
     console.log('📋 Building streaming strategies for:', channel.name);
 
-    // ★ Single network call
     const freshUrl = await this.getChannelStream(channel);
     if (!freshUrl) throw new Error('Could not obtain stream URL');
 
-    // Clean the URL
     let uri = this._cleanUrl(freshUrl) || freshUrl;
 
-    // Xtream URLs must NOT have ?stream= or any query params appended.
-    // Also: use string ops NOT new URL() to preserve explicit port (e.g. :80)
     if (this._isXtreamUrl(uri)) {
       uri = uri.split('?')[0].split('#')[0].replace(/\/$/, '');
       if (!/\.(ts|m3u8|mp4)$/i.test(uri)) uri += '.ts';
@@ -440,10 +239,6 @@ async _getPlaylistInfo(playlistId) {
 
   // ─── Private helpers ──────────────────────────────────────────────────────
 
-  /**
-   * True for  http://host:port/user/pass/12345[.ts]
-   * Uses regex NOT new URL() — URL constructor strips port 80 → 404 on Xtream servers
-   */
   _isXtreamUrl(url) {
     if (!url) return false;
     const base  = url.split('?')[0].split('#')[0];
