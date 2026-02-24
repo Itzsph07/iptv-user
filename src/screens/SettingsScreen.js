@@ -1,5 +1,5 @@
 // screens/SettingsScreen.js
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,10 +12,25 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
+import * as ScreenOrientation from 'expo-screen-orientation';
 
 export default function SettingsScreen({ navigation }) {
   const { settings, updateSetting, resetSettings } = useSettings();
   const { user, logout } = useAuth();
+
+  // Force landscape on mount
+  useEffect(() => {
+    const lockToLandscape = async () => {
+      try {
+        await ScreenOrientation.lockAsync(
+          ScreenOrientation.OrientationLock.LANDSCAPE
+        );
+      } catch (error) {
+        console.log('Failed to lock orientation:', error);
+      }
+    };
+    lockToLandscape();
+  }, []);
 
   const isDirectMode = settings.playbackMode === 'direct';
   const isProxyMode  = settings.playbackMode === 'proxy';
@@ -168,6 +183,7 @@ export default function SettingsScreen({ navigation }) {
   );
 }
 
+// Styles remain the same
 const styles = StyleSheet.create({
   container: {
     flex: 1,

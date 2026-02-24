@@ -1,21 +1,44 @@
 {
   "expo": {
     "sdkVersion": "54.0.0",
+    "orientation": "landscape",
     "ios": {
       "deploymentTarget": "15.1",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "requireFullScreen": true,
+      "orientation": [
+        "landscape"
+      ]
     },
     "android": {
       "targetSdkVersion": 34,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FFFFFF"
+        "backgroundColor": "#FFFFFF",
+        "requireFullscreen" : true
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.MesaIPTV"
+      "package": "com.anonymous.MesaIPTV",
+      "orientation": [
+        "landscape"
+      ],
+      "intentFilters": [
+        {
+          "action": "MAIN",
+          "category": [
+            "LAUNCHER",
+            "LEANBACK_LAUNCHER"
+          ]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "e82b40d7-4454-480a-bd93-d7f36c6b7872"
+      }
     }
   }
 }

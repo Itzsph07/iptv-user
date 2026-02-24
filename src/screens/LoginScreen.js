@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,16 +9,35 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  SafeAreaView
+  SafeAreaView,
+  Dimensions,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import * as ScreenOrientation from 'expo-screen-orientation';
+
+const { width, height } = Dimensions.get('window');
+const isLandscape = width > height;
 
 export default function LoginScreen() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+
+  // Force landscape on mount
+  useEffect(() => {
+    const lockToLandscape = async () => {
+      try {
+        await ScreenOrientation.lockAsync(
+          ScreenOrientation.OrientationLock.LANDSCAPE
+        );
+      } catch (error) {
+        console.log('Failed to lock orientation:', error);
+      }
+    };
+    lockToLandscape();
+  }, []);
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -42,53 +61,59 @@ export default function LoginScreen() {
         style={styles.keyboardView}
       >
         <View style={styles.content}>
+          {/* Left side - Logo */}
           <View style={styles.logoContainer}>
-            <Ionicons name="tv" size={80} color="#e50914" />
-            <Text style={styles.title}>IPTV Player</Text>
+            <Ionicons name="tv" size={100} color="#e50914" />
+            <Text style={styles.title}>MesaIPTV</Text>
             <Text style={styles.subtitle}>Sign in to watch your channels</Text>
           </View>
 
-          <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Ionicons name="person-outline" size={20} color="#999" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Username"
-                placeholderTextColor="#999"
-                value={username}
-                onChangeText={setUsername}
-                autoCapitalize="none"
-              />
-            </View>
+          {/* Right side - Form */}
+          <View style={styles.formContainer}>
+            <View style={styles.formCard}>
+              <Text style={styles.formTitle}>Welcome Back</Text>
+              
+              <View style={styles.inputContainer}>
+                <Ionicons name="person-outline" size={22} color="#999" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Username"
+                  placeholderTextColor="#666"
+                  value={username}
+                  onChangeText={setUsername}
+                  autoCapitalize="none"
+                />
+              </View>
 
-            <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="#999" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                placeholder="Password"
-                placeholderTextColor="#999"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
-            </View>
+              <View style={styles.inputContainer}>
+                <Ionicons name="lock-closed-outline" size={22} color="#999" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Password"
+                  placeholderTextColor="#666"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                />
+              </View>
 
-            <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleLogin}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Sign In</Text>
-              )}
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, loading && styles.buttonDisabled]}
+                onPress={handleLogin}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.buttonText}>Sign In</Text>
+                )}
+              </TouchableOpacity>
+
+              <Text style={styles.demoText}>
+                Contact the provider for credentials!
+              </Text>
+            </View>
           </View>
-
-          <Text style={styles.demoText}>
-            Demo: Use any username/password
-          </Text>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -105,50 +130,78 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    flexDirection: 'row', // Always row for landscape
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 30,
+    paddingHorizontal: 40,
   },
   logoContainer: {
+    flex: 1,
     alignItems: 'center',
-    marginBottom: 50,
+    justifyContent: 'center',
+    paddingRight: 40,
   },
   title: {
-    fontSize: 36,
+    fontSize: 42,
     fontWeight: 'bold',
     color: '#fff',
     marginTop: 20,
+    letterSpacing: 1,
   },
   subtitle: {
     fontSize: 16,
     color: '#999',
     marginTop: 10,
+    textAlign: 'center',
   },
-  form: {
+  formContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 40,
+  },
+  formCard: {
     width: '100%',
+    maxWidth: 400,
+    backgroundColor: '#141414',
+    borderRadius: 16,
+    padding: 30,
+    borderWidth: 1,
+    borderColor: '#1e1e1e',
+  },
+  formTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 30,
+    textAlign: 'center',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1a1a1a',
-    borderRadius: 10,
-    marginBottom: 15,
+    borderRadius: 12,
+    marginBottom: 20,
     paddingHorizontal: 15,
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
   },
   inputIcon: {
-    marginRight: 10,
+    marginRight: 12,
   },
   input: {
     flex: 1,
-    padding: 15,
+    paddingVertical: 16,
     color: '#fff',
     fontSize: 16,
   },
   button: {
     backgroundColor: '#e50914',
-    borderRadius: 10,
-    padding: 15,
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
     marginTop: 10,
+    marginBottom: 20,
   },
   buttonDisabled: {
     opacity: 0.7,
@@ -157,11 +210,12 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   demoText: {
     color: '#666',
     textAlign: 'center',
-    marginTop: 30,
-    fontSize: 12,
+    fontSize: 13,
+    marginTop: 10,
   },
 });

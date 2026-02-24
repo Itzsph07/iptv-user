@@ -1,7 +1,8 @@
 // src/navigation/AppNavigator.js
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, Text, StyleSheet } from 'react-native';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { useAuth } from '../context/AuthContext';
 import LoginScreen    from '../screens/LoginScreen';
 import HomeScreen     from '../screens/HomeScreen';
@@ -19,6 +20,22 @@ function LoadingScreen() {
 
 export default function AppNavigator() {
   const { isAuthenticated, loading } = useAuth();
+
+  // Force landscape when navigator mounts
+  useEffect(() => {
+    const lockToLandscape = async () => {
+      try {
+        await ScreenOrientation.lockAsync(
+          ScreenOrientation.OrientationLock.LANDSCAPE
+        );
+      } catch (error) {
+        console.log('Failed to lock orientation:', error);
+      }
+    };
+    
+    lockToLandscape();
+  }, []);
+
   if (loading) return <LoadingScreen />;
 
   return (

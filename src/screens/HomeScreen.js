@@ -1,6 +1,7 @@
 // src/screens/HomeScreen.js
-// FIXED VERSION - Fullscreen toggles without reloading stream
+// COMPLETE FIXED VERSION - Fullscreen toggles without reloading stream
 // ADDED - Auto-retry and buffering detection
+// ADDED - Force landscape orientation
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import {
@@ -10,6 +11,7 @@ import {
 import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { useKeepAwake } from 'expo-keep-awake';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import channelService from '../services/channelService';
 import api from '../services/api';
 import { useSettings } from '../context/SettingsContext';
@@ -27,6 +29,28 @@ const PROXY_BASE = (() => {
   try { return api.defaults.baseURL.replace(/\/api\/?$/, '') + '/api/proxy/stream'; }
   catch (_) { return 'http://192.168.100.229:5000/api/proxy/stream'; }
 })();
+
+// ─── Force Landscape Hook ─────────────────────────────────────
+const useForceLandscape = () => {
+  useEffect(() => {
+    const lockToLandscape = async () => {
+      try {
+        await ScreenOrientation.lockAsync(
+          ScreenOrientation.OrientationLock.LANDSCAPE
+        );
+        console.log('📱 Screen locked to landscape');
+      } catch (error) {
+        console.log('Failed to lock orientation:', error);
+      }
+    };
+
+    lockToLandscape();
+
+    return () => {
+      ScreenOrientation.unlockAsync().catch(() => {});
+    };
+  }, []);
+};
 
 // ─── PlayerArea (pure display) ────────────────────────────────────────────────
 const PlayerArea = React.memo(({
@@ -128,6 +152,7 @@ const PlayerArea = React.memo(({
 // ─── HomeScreen ───────────────────────────────────────────────────────────────
 export default function HomeScreen({ navigation }) {
   useKeepAwake();
+  useForceLandscape(); // Force landscape mode
   const { settings } = useSettings();
   const { user } = useAuth();
 
@@ -147,7 +172,7 @@ export default function HomeScreen({ navigation }) {
   const [error, setError] = useState(null);
   const [videoKey, setVideoKey] = useState(0);
   
-  // New state for auto-retry
+  // State for auto-retry
   const [buffering, setBuffering] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const [stalledTimer, setStalledTimer] = useState(null);
@@ -636,7 +661,7 @@ export default function HomeScreen({ navigation }) {
     return () => h.remove();
   }, [isFullscreen, showOverlaySidebar]);
 
-  // ─── FIXED: Toggle fullscreen without reloading stream ───
+  // ─── Toggle fullscreen without reloading stream ───
   const toggleFullscreen = useCallback(() => {
     setIsFullscreen(prev => {
       const newValue = !prev;
@@ -925,7 +950,7 @@ const styles = StyleSheet.create({
   controlsBottom: { paddingHorizontal: 10, paddingBottom: 10, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center' },
   hintText: { color: 'rgba(255,255,255,0.38)', fontSize: 9 },
   
-  // New styles for buffering indicator
+  // Styles for buffering indicator
   bufferingOverlay: {
     position: 'absolute',
     top: 20,
