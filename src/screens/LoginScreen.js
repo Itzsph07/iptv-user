@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,30 +15,37 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { setupImmersiveMode } from '../utils/fullscreenHelper';
+import { IS_TV } from '../utils/constants';
 
 const { width, height } = Dimensions.get('window');
 const isLandscape = width > height;
+const isTablet = width >= 768;
 
 export default function LoginScreen() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [btnFocused, setBtnFocused] = useState(false);
   const { login } = useAuth();
 
   // Force landscape on mount
-  useEffect(() => {
-    const lockToLandscape = async () => {
-      try {
-        await ScreenOrientation.lockAsync(
-          ScreenOrientation.OrientationLock.LANDSCAPE
-        );
-      } catch (error) {
-        console.log('Failed to lock orientation:', error);
+useEffect(() => {
+  const setup = async () => {
+    try {
+      await ScreenOrientation.lockAsync(
+        ScreenOrientation.OrientationLock.LANDSCAPE
+      );
+      if (!IS_TV) {
+        await setupImmersiveMode();
       }
-    };
-    lockToLandscape();
-  }, []);
-
+    } catch (error) {
+      console.log('Failed to lock orientation:', error);
+    }
+  };
+  setup();
+}, []);
   const handleLogin = async () => {
     if (!username || !password) {
       Alert.alert('Error', 'Please fill in all fields');
@@ -72,7 +79,7 @@ export default function LoginScreen() {
           <View style={styles.formContainer}>
             <View style={styles.formCard}>
               <Text style={styles.formTitle}>Welcome Back</Text>
-              
+
               <View style={styles.inputContainer}>
                 <Ionicons name="person-outline" size={22} color="#999" style={styles.inputIcon} />
                 <TextInput
@@ -97,17 +104,28 @@ export default function LoginScreen() {
                 />
               </View>
 
-              <TouchableOpacity
-                style={[styles.button, loading && styles.buttonDisabled]}
+              {/* ✅ Sign In button — Pressable with visible focus outline for TV remote */}
+              <Pressable
                 onPress={handleLogin}
+                onFocus={() => setBtnFocused(true)}
+                onBlur={() => setBtnFocused(false)}
                 disabled={loading}
+                focusable={true}
+                android_ripple={null}
+                style={({ pressed }) => [
+                  styles.button,
+                  loading && styles.buttonDisabled,
+                  { opacity: pressed ? 0.85 : 1 },
+                ]}
               >
+                {/* White outline appears when D-pad focuses the button */}
+                {btnFocused && <View style={styles.focusOutline} pointerEvents="none" />}
                 {loading ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <Text style={styles.buttonText}>Sign In</Text>
                 )}
-              </TouchableOpacity>
+              </Pressable>
 
               <Text style={styles.demoText}>
                 Contact the provider for credentials!
@@ -130,7 +148,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    flexDirection: 'row', // Always row for landscape
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,
@@ -142,14 +160,14 @@ const styles = StyleSheet.create({
     paddingRight: 40,
   },
   title: {
-    fontSize: 42,
+    fontSize: 48,
     fontWeight: 'bold',
     color: '#fff',
     marginTop: 20,
-    letterSpacing: 1,
+    letterSpacing: 2,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#999',
     marginTop: 10,
     textAlign: 'center',
@@ -163,11 +181,11 @@ const styles = StyleSheet.create({
   formCard: {
     width: '100%',
     maxWidth: 400,
-    backgroundColor: '#141414',
-    borderRadius: 16,
-    padding: 30,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 20,
+    padding: 32,
     borderWidth: 1,
-    borderColor: '#1e1e1e',
+    borderColor: '#2a2a2a',
   },
   formTitle: {
     fontSize: 28,
@@ -179,12 +197,12 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#2a2a2a',
     borderRadius: 12,
     marginBottom: 20,
-    paddingHorizontal: 15,
+    paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#2a2a2a',
+    borderColor: '#3a3a3a',
   },
   inputIcon: {
     marginRight: 12,
@@ -202,6 +220,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
     marginBottom: 20,
+    position: 'relative',
   },
   buttonDisabled: {
     opacity: 0.7,
@@ -211,6 +230,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     letterSpacing: 0.5,
+  },
+  focusOutline: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    borderRadius: 12,
+    zIndex: 20,
   },
   demoText: {
     color: '#666',

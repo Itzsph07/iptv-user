@@ -1,18 +1,87 @@
 // screens/SettingsScreen.js
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
   Platform,
   StatusBar,
+  BackHandler,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import * as ScreenOrientation from 'expo-screen-orientation';
+
+// Helper functions for expiry date
+const getExpiryDate = (user) => {
+  return user?.customer?.expiryDate || user?.expiryDate || null;
+};
+
+const formatExpiryDate = (user) => {
+  const dateString = getExpiryDate(user);
+  if (!dateString) return 'Not set';
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString(undefined, { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  } catch {
+    return dateString;
+  }
+};
+
+const getDaysRemaining = (user) => {
+  const dateString = getExpiryDate(user);
+  if (!dateString) return null;
+  try {
+    const expiry = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffTime = expiry - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  } catch {
+    return null;
+  }
+};
+
+const isExpired = (user) => {
+  const dateString = getExpiryDate(user);
+  if (!dateString) return false;
+  try {
+    const expiry = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return expiry < today;
+  } catch {
+    return false;
+  }
+};
+
+// Reusable focusable row wrapper
+function FocusableRow({ onPress, style, children }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <Pressable
+      onPress={onPress}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      focusable={true}
+      android_ripple={null}
+      style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}
+    >
+      <View style={[style, focused && styles.focusedRow]}>
+        {focused && <View style={styles.focusOutline} pointerEvents="none" />}
+        {children}
+      </View>
+    </Pressable>
+  );
+}
 
 export default function SettingsScreen({ navigation }) {
   const { settings, updateSetting, resetSettings } = useSettings();
@@ -32,8 +101,21 @@ export default function SettingsScreen({ navigation }) {
     lockToLandscape();
   }, []);
 
+  // Intercept hardware back on Settings screen
+  useEffect(() => {
+    const handler = BackHandler.addEventListener('hardwareBackPress', () => {
+      console.log('⬅️ Settings: going back to Home');
+      navigation.goBack();
+      return true;
+    });
+    return () => handler.remove();
+  }, [navigation]);
+
   const isDirectMode = settings.playbackMode === 'direct';
-  const isProxyMode  = settings.playbackMode === 'proxy';
+  const isProxyMode = settings.playbackMode === 'proxy';
+  
+  const daysRemaining = getDaysRemaining(user);
+  const expired = isExpired(user);
 
   return (
     <View style={styles.container}>
@@ -41,14 +123,109 @@ export default function SettingsScreen({ navigation }) {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+        <FocusableRow
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+        >
           <Ionicons name="arrow-back" size={22} color="#fff" />
-        </TouchableOpacity>
+        </FocusableRow>
         <Text style={styles.headerTitle}>Settings</Text>
         <View style={{ width: 38 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+
+        {/* ── ACCOUNT & SUBSCRIPTION ─────────────────────────────────── */}
+        <Text style={styles.sectionTitle}>ACCOUNT</Text>
+        <View style={styles.card}>
+          <View style={styles.statusRow}>
+            <Ionicons name="person-circle-outline" size={18} color="#888" style={{ marginRight: 8 }} />
+            <Text style={styles.statusLabel}>Logged in as</Text>
+            <Text style={styles.statusValue}>{user?.username || user?.customer?.name || user?.name || '—'}</Text>
+          </View>
+          
+          <View style={styles.divider} />
+          
+          <View style={styles.statusRow}>
+            <Ionicons name="calendar-outline" size={18} color="#888" style={{ marginRight: 8 }} />
+            <Text style={styles.statusLabel}>Subscription expires</Text>
+            <Text style={[styles.statusValue, { color: expired ? '#f44336' : '#4caf50' }]}>
+              {formatExpiryDate(user)}
+            </Text>
+          </View>
+          
+          {!expired && daysRemaining !== null && daysRemaining > 0 && (
+            <>
+              <View style={styles.statusRow}>
+                <Ionicons name="time-outline" size={18} color="#888" style={{ marginRight: 8 }} />
+                <Text style={styles.statusLabel}>Days remaining</Text>
+                <Text style={[styles.statusValue, { color: daysRemaining <= 7 ? '#ff9800' : '#4caf50' }]}>
+                  {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'}
+                </Text>
+              </View>
+              
+              {/* Warning banner for low days */}
+              {daysRemaining <= 10 && daysRemaining > 0 && (
+                <View style={[styles.statusRow, styles.warningRow]}>
+                  <Ionicons name="warning" size={18} color="#ff9800" style={{ marginRight: 8 }} />
+                  <Text style={styles.warningText}>
+                    ⚠️ Your subscription expires in {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'}!
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+          
+          {expired && (
+            <View style={[styles.statusRow, styles.expiredRow]}>
+              <Ionicons name="close-circle" size={18} color="#f44336" style={{ marginRight: 8 }} />
+              <Text style={styles.expiredText}>
+                ❌ SUBSCRIPTION EXPIRED - Please contact support
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* ── DECODER SETTINGS ─────────────────────────────────── */}
+        <Text style={styles.sectionTitle}>DECODER</Text>
+        <View style={styles.card}>
+          <FocusableRow
+            onPress={() => updateSetting('forceSoftwareDecoder', !settings.forceSoftwareDecoder)}
+            style={styles.toggleRow}
+          >
+            <View style={styles.toggleLeft}>
+              <Ionicons
+                name={settings.forceSoftwareDecoder ? 'code-slash' : 'hardware-chip'}
+                size={20}
+                color={settings.forceSoftwareDecoder ? '#818cf8' : '#22c55e'}
+                style={{ marginRight: 12 }}
+              />
+              <View>
+                <Text style={styles.toggleTitle}>
+                  {settings.forceSoftwareDecoder ? 'Software Decoder' : 'Hardware Decoder'}
+                </Text>
+                <Text style={styles.toggleDesc}>
+                  {settings.forceSoftwareDecoder
+                    ? 'Software (MediaPlayer) · CPU · Works on all devices'
+                    : 'Hardware (ExoPlayer) · GPU · Faster, may crash on some devices'}
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.toggle, settings.forceSoftwareDecoder && styles.toggleOn]}>
+              <View style={[styles.toggleThumb, settings.forceSoftwareDecoder && styles.toggleThumbOn]} />
+            </View>
+          </FocusableRow>
+
+          <View style={styles.divider} />
+
+          <View style={styles.statusRow}>
+            <Ionicons name="information-circle-outline" size={18} color="#888" style={{ marginRight: 8 }} />
+            <Text style={styles.statusLabel}>Current decoder</Text>
+            <Text style={[styles.statusValue, { color: settings.forceSoftwareDecoder ? '#818cf8' : '#22c55e' }]}>
+              {settings.forceSoftwareDecoder ? 'Software (MediaPlayer)' : 'Hardware (ExoPlayer)'}
+            </Text>
+          </View>
+        </View>
 
         {/* ── Playback Mode ────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>PLAYBACK MODE</Text>
@@ -60,10 +237,9 @@ export default function SettingsScreen({ navigation }) {
           </Text>
 
           {/* Direct option */}
-          <TouchableOpacity
-            style={[styles.modeOption, isDirectMode && styles.modeOptionActive]}
+          <FocusableRow
             onPress={() => updateSetting('playbackMode', 'direct')}
-            activeOpacity={0.75}
+            style={[styles.modeOption, isDirectMode && styles.modeOptionActive]}
           >
             <View style={styles.modeLeft}>
               <View style={[styles.modeIcon, isDirectMode && styles.modeIconActive]}>
@@ -81,16 +257,15 @@ export default function SettingsScreen({ navigation }) {
             <View style={[styles.radio, isDirectMode && styles.radioActive]}>
               {isDirectMode && <View style={styles.radioDot} />}
             </View>
-          </TouchableOpacity>
+          </FocusableRow>
 
           {/* Proxy option */}
-          <TouchableOpacity
-            style={[styles.modeOption, isProxyMode && styles.modeOptionActive]}
+          <FocusableRow
             onPress={() => updateSetting('playbackMode', 'proxy')}
-            activeOpacity={0.75}
+            style={[styles.modeOption, isProxyMode && styles.modeOptionActive]}
           >
             <View style={styles.modeLeft}>
-              <View style={[styles.modeIcon, isProxyMode && styles.modeIconActive, styles.modeIconProxy]}>
+              <View style={[styles.modeIcon, isProxyMode && styles.modeIconActive]}>
                 <Ionicons name="swap-horizontal" size={20} color={isProxyMode ? '#fff' : '#555'} />
               </View>
               <View style={styles.modeText}>
@@ -102,19 +277,18 @@ export default function SettingsScreen({ navigation }) {
                 </Text>
               </View>
             </View>
-            <View style={[styles.radio, isProxyMode && styles.radioActive, styles.radioProxy]}>
+            <View style={[styles.radio, isProxyMode && styles.radioActive]}>
               {isProxyMode && <View style={styles.radioDot} />}
             </View>
-          </TouchableOpacity>
+          </FocusableRow>
         </View>
 
         {/* ── Auto Fallback ────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>FALLBACK</Text>
         <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.toggleRow}
+          <FocusableRow
             onPress={() => updateSetting('autoFallbackToProxy', !settings.autoFallbackToProxy)}
-            activeOpacity={0.75}
+            style={styles.toggleRow}
           >
             <View style={styles.toggleLeft}>
               <Ionicons name="refresh-circle-outline" size={20} color="#aaa" style={{ marginRight: 12 }} />
@@ -129,18 +303,12 @@ export default function SettingsScreen({ navigation }) {
             <View style={[styles.toggle, settings.autoFallbackToProxy && styles.toggleOn]}>
               <View style={[styles.toggleThumb, settings.autoFallbackToProxy && styles.toggleThumbOn]} />
             </View>
-          </TouchableOpacity>
+          </FocusableRow>
         </View>
 
         {/* ── Current status ───────────────────────────────────── */}
         <Text style={styles.sectionTitle}>CURRENT STATUS</Text>
         <View style={styles.card}>
-          <View style={styles.statusRow}>
-            <Ionicons name="person-circle-outline" size={18} color="#888" style={{ marginRight: 8 }} />
-            <Text style={styles.statusLabel}>Logged in as</Text>
-            <Text style={styles.statusValue}>{user?.username || '—'}</Text>
-          </View>
-          <View style={styles.divider} />
           <View style={styles.statusRow}>
             <Ionicons
               name={isDirectMode ? 'flash' : 'swap-horizontal'}
@@ -164,17 +332,17 @@ export default function SettingsScreen({ navigation }) {
         </View>
 
         {/* ── Reset / Logout ───────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>ACCOUNT</Text>
+        <Text style={styles.sectionTitle}>ACTIONS</Text>
         <View style={styles.card}>
-          <TouchableOpacity style={styles.actionRow} onPress={resetSettings} activeOpacity={0.75}>
+          <FocusableRow onPress={resetSettings} style={styles.actionRow}>
             <Ionicons name="refresh-outline" size={18} color="#aaa" style={{ marginRight: 12 }} />
             <Text style={styles.actionText}>Reset Settings to Default</Text>
-          </TouchableOpacity>
+          </FocusableRow>
           <View style={styles.divider} />
-          <TouchableOpacity style={styles.actionRow} onPress={logout} activeOpacity={0.75}>
+          <FocusableRow onPress={logout} style={styles.actionRow}>
             <Ionicons name="log-out-outline" size={18} color="#e50914" style={{ marginRight: 12 }} />
             <Text style={[styles.actionText, { color: '#e50914' }]}>Logout</Text>
-          </TouchableOpacity>
+          </FocusableRow>
         </View>
 
         <View style={{ height: 40 }} />
@@ -183,7 +351,6 @@ export default function SettingsScreen({ navigation }) {
   );
 }
 
-// Styles remain the same
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -200,7 +367,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#1e1e1e',
   },
-  backBtn: { padding: 6 },
+  backBtn: {
+    padding: 6,
+    borderRadius: 8,
+  },
   headerTitle: {
     color: '#fff',
     fontSize: 17,
@@ -233,8 +403,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#1a1a1a',
   },
-
-  // Mode options
+  focusedRow: {
+    position: 'relative',
+  },
+  focusOutline: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderWidth: 3,
+    borderColor: '#ffffff',
+    borderRadius: 8,
+    zIndex: 20,
+  },
   modeOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -242,6 +424,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#1a1a1a',
+    position: 'relative',
   },
   modeOptionActive: {
     backgroundColor: '#1a0a0a',
@@ -263,7 +446,6 @@ const styles = StyleSheet.create({
   modeIconActive: {
     backgroundColor: '#e50914',
   },
-  modeIconProxy: {},
   modeText: { flex: 1 },
   modeTitle: {
     color: '#aaa',
@@ -288,20 +470,18 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   radioActive: { borderColor: '#e50914' },
-  radioProxy: {},
   radioDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
     backgroundColor: '#e50914',
   },
-
-  // Toggle
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 14,
+    position: 'relative',
   },
   toggleLeft: {
     flexDirection: 'row',
@@ -339,8 +519,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     alignSelf: 'flex-end',
   },
-
-  // Status
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -362,16 +540,37 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a1a',
     marginHorizontal: 14,
   },
-
-  // Action rows
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 14,
+    position: 'relative',
   },
   actionText: {
     color: '#aaa',
     fontSize: 14,
+  },
+  warningRow: {
+    backgroundColor: 'rgba(255, 152, 0, 0.15)',
+    borderRadius: 8,
+    marginHorizontal: 14,
+    marginBottom: 8,
+  },
+  warningText: {
+    color: '#ff9800',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  expiredRow: {
+    backgroundColor: 'rgba(244, 67, 54, 0.15)',
+    borderRadius: 8,
+    marginHorizontal: 14,
+    marginBottom: 8,
+  },
+  expiredText: {
+    color: '#f44336',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

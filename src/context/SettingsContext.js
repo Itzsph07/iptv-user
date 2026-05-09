@@ -7,6 +7,8 @@ const STORAGE_KEY = '@IPTV:settings';
 const defaults = {
   playbackMode: 'direct',       // 'direct' | 'proxy'
   autoFallbackToProxy: true,    // auto switch to proxy on direct failure
+  // ★ ADD THIS ★
+  forceSoftwareDecoder: false,  // false = hardware (ExoPlayer), true = software (MediaPlayer)
 };
 
 const SettingsContext = createContext(null);
@@ -43,7 +45,7 @@ export const SettingsProvider = ({ children }) => {
     setSettings(defaults);
   }, []);
 
-  if (!loaded) return null; // wait for AsyncStorage before rendering children
+  if (!loaded) return null;
 
   return (
     <SettingsContext.Provider value={{ settings, updateSetting, resetSettings }}>

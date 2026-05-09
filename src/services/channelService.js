@@ -112,15 +112,18 @@ class ChannelService {
 
   _android(uri, mac, domain, creds) {
     return [
-      {
-        strategyName: 'Android ExoPlayer',
-        headers: {
-          'User-Agent':      'ExoPlayer/2.18.1 (Linux; Android 10) ExoPlayerLib/2.18.1',
-          'Accept':          'video/mp2t, application/vnd.apple.mpegurl, video/*, */*',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Accept-Encoding': 'identity',
-          'Connection':      'keep-alive',
-        },
+   {
+  strategyName: 'Android ExoPlayer (Fuego Optimized)',
+  headers: {
+    'User-Agent': 'ExoPlayer/2.18.1 (Linux; Android 10) ExoPlayerLib/2.18.1',
+    'Accept': 'video/mp2t, video/mp4, audio/mp4, audio/aac, audio/mpeg, audio/opus, audio/ogg, audio/webm, application/vnd.apple.mpegurl, */*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'identity',
+    'Connection': 'keep-alive',
+    'X-ExoPlayer-Version': '2.18.1',
+    'X-Android-Drm': 'clear', // Prevents DRM issues on Fuego
+    'X-Requested-With': 'com.mesashop.iptv', // Your package name
+  },
       },
       {
         strategyName: 'OTT Navigator',
@@ -142,18 +145,7 @@ class ChannelService {
           'Connection':      'keep-alive',
         },
       },
-      {
-        strategyName: 'VLC Compatible',
-        headers: {
-          'User-Agent':      'VLC/3.0.18 LibVLC/3.0.18',
-          'Accept':          'video/mp2t, video/quicktime, video/*, */*',
-          'Accept-Language': 'en-US,*',
-          'Accept-Encoding': 'identity',
-          'Connection':      'keep-alive',
-          'Icy-MetaData':    '1',
-          'Range':           'bytes=0-',
-        },
-      },
+      
       {
         strategyName: 'MAG Device',
         headers: {

@@ -1,3 +1,4 @@
+// src/services/api.js
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@env';
@@ -17,6 +18,12 @@ api.interceptors.request.use(
     async (config) => {
         console.log(`Making ${config.method.toUpperCase()} request to:`, config.baseURL + config.url);
         console.log('Request data:', config.data);
+        
+        // Check if request was aborted before sending
+        if (config.signal?.aborted) {
+            console.log('Request was already aborted, skipping');
+            throw new axios.Cancel('Request aborted');
+        }
         
         const token = await AsyncStorage.getItem('@IPTV:token');
         if (token) {
@@ -41,6 +48,12 @@ api.interceptors.response.use(
         return response;
     },
     async (error) => {
+        // Handle aborted requests gracefully
+        if (axios.isCancel(error)) {
+            console.log('Request was cancelled:', error.message);
+            return Promise.reject({ ...error, isCancelled: true });
+        }
+        
         console.error('Response error:', {
             message: error.message,
             response: error.response?.data,

@@ -1,11 +1,12 @@
 // screens/ChannelListScreen.js
 // Channels displayed in DB order (admin-set) — no client-side re-sorting
+// ENHANCED with focus effects for Android TV
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet,
   TextInput, ActivityIndicator, Image, RefreshControl,
-  SafeAreaView, SectionList, Alert,
+  SafeAreaView, SectionList, Alert, Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -13,6 +14,195 @@ import channelService from '../services/channelService';
 import { useFocusEffect } from '@react-navigation/native';
 
 const DOUBLE_TAP_MS = 300;
+
+// Enhanced Channel Item Component with focus effects
+const ChannelItem = ({ 
+  item, 
+  isActive, 
+  onPress, 
+  onFocus,
+  index,
+  isFirst,
+}) => {
+  const [isFocused, setIsFocused] = useState(false);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const bgAnim = useRef(new Animated.Value(0)).current;
+
+  const handleFocus = () => {
+    setIsFocused(true);
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1.05,
+        friction: 3,
+        useNativeDriver: true,
+      }),
+      Animated.timing(bgAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: false,
+      })
+    ]).start();
+    onFocus?.(item);
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 3,
+        useNativeDriver: true,
+      }),
+      Animated.timing(bgAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: false,
+      })
+    ]).start();
+  };
+
+  const backgroundColor = bgAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [
+      isActive ? '#1a0505' : '#0f0f0f',
+      '#e50914'
+    ]
+  });
+
+  const borderLeftColor = bgAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [
+      isActive ? '#f90' : 'transparent',
+      '#ffffff'
+    ]
+  });
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      activeOpacity={1}
+      hasTVPreferredFocus={isFirst}
+    >
+      <Animated.View 
+        style={[
+          styles.channelItem,
+          {
+            transform: [{ scale: scaleAnim }],
+            backgroundColor: isFocused ? backgroundColor : (isActive ? '#1a0505' : '#0f0f0f'),
+            borderLeftWidth: isFocused ? 4 : (isActive ? 3 : 0),
+            borderLeftColor: isFocused ? borderLeftColor : (isActive ? '#f90' : 'transparent'),
+            marginVertical: isFocused ? 4 : 2,
+            marginHorizontal: isFocused ? 8 : 4,
+            elevation: isFocused ? 8 : 0,
+            shadowColor: '#e50914',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: isFocused ? 0.5 : 0,
+            shadowRadius: isFocused ? 8 : 0,
+            zIndex: isFocused ? 10 : 1,
+          }
+        ]}
+      >
+        <View style={styles.logoContainer}>
+          {item.logo ? (
+            <Image 
+              source={{ uri: item.logo }} 
+              style={[
+                styles.channelLogo,
+                isFocused && styles.channelLogoFocused
+              ]} 
+            />
+          ) : (
+            <View style={[
+              styles.placeholderLogo,
+              isFocused && styles.placeholderLogoFocused
+            ]}>
+              <Ionicons 
+                name="tv" 
+                size={isFocused ? 26 : 22} 
+                color={isFocused ? "#fff" : "#555"} 
+              />
+            </View>
+          )}
+        </View>
+
+        <View style={styles.channelInfo}>
+          <Text 
+            style={[
+              styles.channelName,
+              isActive && styles.channelNameActive,
+              isFocused && styles.channelNameFocused
+            ]} 
+            numberOfLines={1}
+          >
+            {item.name}
+          </Text>
+          
+          {item.isHd && (
+            <View style={[
+              styles.hdBadge,
+              isFocused && styles.hdBadgeFocused
+            ]}>
+              <Text style={[
+                styles.hdText,
+                isFocused && styles.hdTextFocused
+              ]}>HD</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.playIconContainer}>
+          <Ionicons 
+            name={isActive ? "tv" : "play-circle"} 
+            size={isFocused ? 34 : (isActive ? 24 : 30)} 
+            color={isFocused ? "#fff" : (isActive ? "#f90" : "#e50914")} 
+          />
+          {isFocused && (
+            <Text style={styles.focusHint}>
+              {isActive ? 'Press to toggle fullscreen' : 'Press to play'}
+            </Text>
+          )}
+        </View>
+
+        {isFocused && !isActive && (
+          <Animated.View 
+            style={[
+              styles.focusGlow,
+              {
+                opacity: bgAnim,
+              }
+            ]} 
+          />
+        )}
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
+// Enhanced Section Header with focus effects
+const SectionHeader = ({ title, count, isFocused }) => {
+  return (
+    <View style={[
+      styles.sectionHeader,
+      isFocused && styles.sectionHeaderFocused
+    ]}>
+      <Text style={[
+        styles.sectionTitle,
+        isFocused && styles.sectionTitleFocused
+      ]}>{title}</Text>
+      <View style={[
+        styles.sectionCountContainer,
+        isFocused && styles.sectionCountContainerFocused
+      ]}>
+        <Text style={[
+          styles.sectionCount,
+          isFocused && styles.sectionCountFocused
+        ]}>{count}</Text>
+      </View>
+    </View>
+  );
+};
 
 export default function ChannelListScreen({ navigation }) {
   const [channels, setChannels]   = useState([]);
@@ -22,115 +212,116 @@ export default function ChannelListScreen({ navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError]         = useState(null);
   const [currentChannelId, setCurrentChannelId] = useState(null);
+  const [focusedSection, setFocusedSection] = useState(null);
   const { user, logout }          = useAuth();
   
   const lastTapTime = useRef(0);
-  const originalOrderRef = useRef([]); // Store original order
+  const sectionListRef = useRef(null);
 
-// ─── Group channels alphabetically ─────────────────────────────────
-const groupChannels = useCallback((list) => {
-  if (!list || !list.length) {
-    setSections([]);
-    return;
-  }
-
-  // Sort channels alphabetically by name
-  const sortedList = [...list].sort((a, b) => 
-    (a.name || '').localeCompare(b.name || '')
-  );
-
-  // Group by genre
-  const genreMap = new Map();
-  
-  sortedList.forEach(ch => {
-    const g = ch.group || 'Uncategorized';
-    if (!genreMap.has(g)) {
-      genreMap.set(g, []);
+  // ─── Group channels alphabetically ─────────────────────────────────
+  const groupChannels = useCallback((list) => {
+    if (!list || !list.length) {
+      setSections([]);
+      return;
     }
-    genreMap.get(g).push(ch);
-  });
-  
-  // Sort genres alphabetically
-  const sortedGenres = Array.from(genreMap.keys()).sort((a, b) => a.localeCompare(b));
-  
-  // Build sections
-  const built = sortedGenres.map(title => ({
-    title,
-    data: genreMap.get(title)
-  }));
-  
-  setSections(built);
-}, []);
 
-const loadChannels = useCallback(async () => {
-  try {
-    setError(null);
-    const data = await channelService.getMyChannels();
-    setChannels(data);
+    // Sort channels alphabetically by name
+    const sortedList = [...list].sort((a, b) => 
+      (a.name || '').localeCompare(b.name || '')
+    );
+
+    // Group by genre
+    const genreMap = new Map();
     
-    if (searchQuery.trim()) {
-      // Filter by search, then sort
-      const filtered = data.filter(ch => 
-        ch.name?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      groupChannels(filtered);
-    } else {
-      groupChannels(data);
-    }
-  } catch (err) {
-    console.error('Failed to load channels:', err);
-    setError('Failed to load channels. Pull down to refresh.');
-  } finally {
-    setLoading(false);
-    setRefreshing(false);
-  }
-}, [searchQuery]);
-
-const handleSearch = useCallback((text) => {
-  setSearchQuery(text);
-  if (!text.trim()) {
-    groupChannels(channels);
-    return;
-  }
-  
-  const filtered = channels.filter(ch => 
-    ch.name?.toLowerCase().includes(text.toLowerCase())
-  );
-  groupChannels(filtered);
-}, [channels]);
-
-const handleRefresh = useCallback(async () => {
-  setRefreshing(true);
-  try {
-    const fresh = await channelService.getMyChannels();
-    setChannels(fresh);
+    sortedList.forEach(ch => {
+      const g = ch.group || 'Uncategorized';
+      if (!genreMap.has(g)) {
+        genreMap.set(g, []);
+      }
+      genreMap.get(g).push(ch);
+    });
     
-    if (searchQuery.trim()) {
-      const filtered = fresh.filter(ch => 
-        ch.name?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      groupChannels(filtered);
-    } else {
-      groupChannels(fresh);
-    }
-  } catch (err) {
-    Alert.alert('Refresh Failed', 'Could not refresh channels. Please try again.');
-  } finally {
-    setRefreshing(false);
-  }
-}, [searchQuery]);
+    // Sort genres alphabetically
+    const sortedGenres = Array.from(genreMap.keys()).sort((a, b) => a.localeCompare(b));
+    
+    // Build sections
+    const built = sortedGenres.map(title => ({
+      title,
+      data: genreMap.get(title)
+    }));
+    
+    setSections(built);
+  }, []);
 
-  // ★★★ FIXED: Handle channel press with force reset ★★★
+  const loadChannels = useCallback(async () => {
+    try {
+      setError(null);
+      const data = await channelService.getMyChannels();
+      setChannels(data);
+      
+      if (searchQuery.trim()) {
+        // Filter by search, then sort
+        const filtered = data.filter(ch => 
+          ch.name?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        groupChannels(filtered);
+      } else {
+        groupChannels(data);
+      }
+    } catch (err) {
+      console.error('Failed to load channels:', err);
+      setError('Failed to load channels. Pull down to refresh.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [searchQuery]);
+
+  const handleSearch = useCallback((text) => {
+    setSearchQuery(text);
+    if (!text.trim()) {
+      groupChannels(channels);
+      return;
+    }
+    
+    const filtered = channels.filter(ch => 
+      ch.name?.toLowerCase().includes(text.toLowerCase())
+    );
+    groupChannels(filtered);
+  }, [channels]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const fresh = await channelService.getMyChannels();
+      setChannels(fresh);
+      
+      if (searchQuery.trim()) {
+        const filtered = fresh.filter(ch => 
+          ch.name?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+        groupChannels(filtered);
+      } else {
+        groupChannels(fresh);
+      }
+    } catch (err) {
+      Alert.alert('Refresh Failed', 'Could not refresh channels. Please try again.');
+    } finally {
+      setRefreshing(false);
+    }
+  }, [searchQuery]);
+
+  // Enhanced channel press handler
   const handleChannelPress = useCallback((channel) => {
-    navigation.replace('Player', { channel });
     const now = Date.now();
+    const channelId = channel.channelId || channel._id;
     
     if (now - lastTapTime.current < DOUBLE_TAP_MS) {
       lastTapTime.current = 0;
       navigation.navigate('Home', { 
         channel, 
         startFullscreen: true,
-        forceReset: Date.now() // Force Video component reset
+        forceReset: Date.now()
       });
     } 
     else if (channelId === currentChannelId) {
@@ -138,7 +329,7 @@ const handleRefresh = useCallback(async () => {
       navigation.navigate('Home', { 
         channel, 
         startFullscreen: true,
-        forceReset: Date.now() // Force Video component reset
+        forceReset: Date.now()
       });
     } 
     else {
@@ -146,61 +337,47 @@ const handleRefresh = useCallback(async () => {
       setCurrentChannelId(channelId);
       navigation.navigate('Home', { 
         channel,
-        forceReset: Date.now() // Force Video component reset
+        forceReset: Date.now()
       });
     }
   }, [navigation, currentChannelId]);
 
-  const renderChannel = useCallback(({ item, index }) => {
+  // Load channels on mount
+  useEffect(() => {
+    loadChannels();
+  }, []);
+
+  const renderChannel = useCallback(({ item, index, section }) => {
     const channelId = item.channelId || item._id;
     const isActive = channelId === currentChannelId;
+    const isFirstInSection = index === 0;
     
     return (
-      <TouchableOpacity 
-        style={[
-          styles.channelItem, 
-          isActive && styles.channelItemActive
-        ]} 
+      <ChannelItem
+        item={item}
+        isActive={isActive}
+        index={index}
+        isFirst={isFirstInSection && section.title === sections[0]?.title}
         onPress={() => handleChannelPress(item)}
-        activeOpacity={0.7}
-      >
-        {item.logo ? (
-          <Image source={{ uri: item.logo }} style={styles.channelLogo} />
-        ) : (
-          <View style={styles.placeholderLogo}>
-            <Ionicons name="tv" size={22} color="#555" />
-          </View>
-        )}
-        <View style={styles.channelInfo}>
-          <Text style={[styles.channelName, isActive && styles.channelNameActive]} numberOfLines={1}>
-            {item.name}
-          </Text>
-          {item.isHd && (
-            <View style={styles.hdBadge}>
-              <Text style={styles.hdText}>HD</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.playIconContainer}>
-          <Ionicons 
-            name={isActive ? "tv" : "play-circle"} 
-            size={isActive ? 24 : 30} 
-            color={isActive ? "#f90" : "#e50914"} 
-          />
-          <Text style={styles.tapHint}>
-            {isActive ? 'tap for fullscreen' : 'double-tap for fullscreen'}
-          </Text>
-        </View>
-      </TouchableOpacity>
+        onFocus={() => {
+          // Optional: scroll to make focused item visible
+          // You can implement scrolling logic here
+        }}
+      />
     );
-  }, [handleChannelPress, currentChannelId]);
+  }, [currentChannelId, handleChannelPress, sections]);
 
   const renderSectionHeader = useCallback(({ section: { title, data } }) => (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <Text style={styles.sectionCount}>{data.length}</Text>
-    </View>
-  ), []);
+    <SectionHeader 
+      title={title} 
+      count={data.length}
+      isFocused={focusedSection === title}
+    />
+  ), [focusedSection]);
+
+  const handleSectionFocus = useCallback((title) => {
+    setFocusedSection(title);
+  }, []);
 
   if (loading) {
     return (
@@ -221,7 +398,11 @@ const handleRefresh = useCallback(async () => {
             <Text style={styles.welcomeText}>Welcome back,</Text>
             <Text style={styles.userName}>{user?.username || 'User'}</Text>
           </View>
-          <TouchableOpacity onPress={logout} style={styles.logoutButton}>
+          <TouchableOpacity 
+            onPress={logout} 
+            style={styles.logoutButton}
+            activeOpacity={0.7}
+          >
             <Ionicons name="log-out-outline" size={24} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -259,16 +440,19 @@ const handleRefresh = useCallback(async () => {
         </View>
       ) : (
         <SectionList
+          ref={sectionListRef}
           sections={sections}
           renderItem={renderChannel}
           renderSectionHeader={renderSectionHeader}
-          keyExtractor={(item) => `${item.playlistId}-${item.channelId}-${item._originalIndex}`}
+          keyExtractor={(item) => `${item.playlistId}-${item.channelId || item._id}`}
           stickySectionHeadersEnabled
           contentContainerStyle={styles.listContent}
           removeClippedSubviews={false}
           initialNumToRender={30}
           maxToRenderPerBatch={20}
           windowSize={10}
+          showsVerticalScrollIndicator={false}
+          onScrollBeginDrag={() => setFocusedSection(null)}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -283,8 +467,6 @@ const handleRefresh = useCallback(async () => {
   );
 }
 
-// ... (keep all existing styles the same)
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a0a' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
@@ -297,7 +479,7 @@ const styles = StyleSheet.create({
   },
   welcomeText: { color: '#666', fontSize: 12 },
   userName: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-  logoutButton: { padding: 8 },
+  logoutButton: { padding: 8, borderRadius: 20 },
 
   searchContainer: {
     flexDirection: 'row', alignItems: 'center',
@@ -307,52 +489,230 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, paddingVertical: 12, color: '#fff', fontSize: 16 },
 
   listContent: { paddingBottom: 20 },
+  
+  // Section Header Styles
   sectionHeader: {
     backgroundColor: '#1a1a1a',
-    paddingHorizontal: 15, paddingVertical: 8,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#2a2a2a',
   },
-  sectionTitle: { color: '#e50914', fontSize: 13, fontWeight: 'bold', textTransform: 'uppercase' },
-  sectionCount: { color: '#444', fontSize: 11 },
+  sectionHeaderFocused: {
+    backgroundColor: '#e50914',
+    borderBottomColor: '#fff',
+  },
+  sectionTitle: {
+    color: '#e50914',
+    fontSize: 14,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  sectionTitleFocused: {
+    color: '#fff',
+  },
+  sectionCountContainer: {
+    backgroundColor: '#2a2a2a',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  sectionCountContainerFocused: {
+    backgroundColor: '#fff',
+  },
+  sectionCount: {
+    color: '#999',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  sectionCountFocused: {
+    color: '#e50914',
+  },
 
+  // Channel Item Styles
   channelItem: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 12, borderBottomWidth: 1, borderBottomColor: '#141414',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#141414',
     backgroundColor: '#0f0f0f',
+    borderRadius: 8,
+    marginHorizontal: 4,
+    marginVertical: 2,
   },
-  channelItemActive: {
-    backgroundColor: '#1a0505',
-    borderLeftWidth: 3,
-    borderLeftColor: '#f90',
+  
+  logoContainer: {
+    marginRight: 12,
   },
-  channelLogo: { width: 40, height: 40, borderRadius: 5, resizeMode: 'contain' },
+  
+  channelLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 6,
+    resizeMode: 'contain',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  
+  channelLogoFocused: {
+    width: 44,
+    height: 44,
+    borderColor: '#fff',
+    borderWidth: 2,
+  },
+  
   placeholderLogo: {
-    width: 40, height: 40, borderRadius: 5,
-    backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center',
+    width: 40,
+    height: 40,
+    borderRadius: 6,
+    backgroundColor: '#1a1a1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  channelInfo: { flex: 1, marginLeft: 12, flexDirection: 'row', alignItems: 'center' },
-  channelName: { color: '#fff', fontSize: 14, flex: 1 },
-  channelNameActive: { color: '#f90', fontWeight: 'bold' },
-  hdBadge: {
-    backgroundColor: '#1a3a5c', paddingHorizontal: 4,
-    paddingVertical: 2, borderRadius: 3, marginLeft: 8,
+  
+  placeholderLogoFocused: {
+    width: 44,
+    height: 44,
+    backgroundColor: '#e50914',
+    borderColor: '#fff',
   },
-  hdText: { color: '#4fc3f7', fontSize: 8, fontWeight: 'bold' },
-  playIconContainer: { 
+  
+  channelInfo: {
+    flex: 1,
+    marginLeft: 12,
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  tapHint: { 
-    color: '#444', 
-    fontSize: 8, 
+  
+  channelName: {
+    color: '#fff',
+    fontSize: 15,
+    flex: 1,
+    fontWeight: '400',
+  },
+  
+  channelNameActive: {
+    color: '#f90',
+    fontWeight: 'bold',
+  },
+  
+  channelNameFocused: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  
+  hdBadge: {
+    backgroundColor: '#1a3a5c',
+    paddingHorizontal: 5,
+    paddingVertical: 3,
+    borderRadius: 4,
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  
+  hdBadgeFocused: {
+    backgroundColor: '#fff',
+    borderColor: '#e50914',
+  },
+  
+  hdText: {
+    color: '#4fc3f7',
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
+  
+  hdTextFocused: {
+    color: '#e50914',
+    fontSize: 10,
+  },
+  
+  playIconContainer: {
+    alignItems: 'center',
+    marginLeft: 8,
+    minWidth: 50,
+  },
+  
+  tapHint: {
+    color: '#444',
+    fontSize: 8,
     marginTop: 2,
   },
+  
+  focusHint: {
+    color: '#fff',
+    fontSize: 8,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  
+  focusGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(229,9,20,0.2)',
+    borderRadius: 8,
+    zIndex: -1,
+  },
 
-  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  errorText: { color: '#999', fontSize: 16, textAlign: 'center', marginTop: 10, marginBottom: 20 },
-  retryButton: { backgroundColor: '#e50914', paddingHorizontal: 30, paddingVertical: 10, borderRadius: 5 },
-  retryButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  errorContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    padding: 20 
+  },
+  
+  errorText: { 
+    color: '#999', 
+    fontSize: 16, 
+    textAlign: 'center', 
+    marginTop: 10, 
+    marginBottom: 20 
+  },
+  
+  retryButton: { 
+    backgroundColor: '#e50914', 
+    paddingHorizontal: 30, 
+    paddingVertical: 12, 
+    borderRadius: 8 
+  },
+  
+  retryButtonText: { 
+    color: '#fff', 
+    fontSize: 16, 
+    fontWeight: 'bold' 
+  },
 
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  emptyText: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginTop: 20 },
-  emptySubtext: { color: '#444', fontSize: 14, marginTop: 10 },
+  emptyContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    padding: 20 
+  },
+  
+  emptyText: { 
+    color: '#fff', 
+    fontSize: 18, 
+    fontWeight: 'bold', 
+    marginTop: 20 
+  },
+  
+  emptySubtext: { 
+    color: '#444', 
+    fontSize: 14, 
+    marginTop: 10 
+  },
 });
