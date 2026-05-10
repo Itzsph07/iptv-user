@@ -1,16 +1,23 @@
-// plugins/with-ffmpeg-fix.js
-const { withAppBuildGradle, withProjectBuildGradle } = require("@expo/config-plugins");
+// plugins/localFFmpeg.js — REPLACE your entire file
+const { withAppBuildGradle, withProjectBuildGradle } 
+  = require("@expo/config-plugins");
 
 module.exports = function withFFmpegFix(config) {
-  // Modify project-level build.gradle
+  // Project-level build.gradle: add repos
   config = withProjectBuildGradle(config, (cfg) => {
     let contents = cfg.modResults.contents;
     
-    // Add repositories
-    if (!contents.includes("flatDir")) {
+    if (!contents.includes("jitpack.io")) {
       contents = contents.replace(
         /allprojects\s*{\s*repositories\s*{/,
-        `allprojects {\n    repositories {\n        flatDir {\n            dirs project(':app').file('libs')\n        }\n        maven { url 'https://www.jitpack.io' }\n        mavenCentral()\n        google()`
+        `allprojects {
+    repositories {
+        flatDir {
+            dirs project(':app').file('libs')
+        }
+        maven { url 'https://www.jitpack.io' }
+        google()
+        mavenCentral()`
       );
       cfg.modResults.contents = contents;
     }
@@ -18,35 +25,23 @@ module.exports = function withFFmpegFix(config) {
     return cfg;
   });
   
-  // Modify app/build.gradle to exclude broken dependencies
+  // App-level build.gradle: packagingOptions
   config = withAppBuildGradle(config, (cfg) => {
     let contents = cfg.modResults.contents;
     
-    // Add packagingOptions
     if (!contents.includes("packagingOptions")) {
       contents = contents.replace(
         /android\s*{/,
-        `android {\n    packagingOptions {\n        pickFirst '**/libc++_shared.so'\n        pickFirst '**/libjsc.so'\n    }`
+        `android {
+    packagingOptions {
+        pickFirst '**/libc++_shared.so'
+        pickFirst '**/libffmpegkit.so'
+    }`
       );
     }
     
-    // Add configuration to exclude broken FFmpeg dependencies
-    const excludeConfig = `
-// Force exclude broken FFmpegKit dependencies
-configurations.all {
-    exclude group: 'com.arthenica', module: 'ffmpeg-kit-https'
-    exclude group: 'com.arthenica', module: 'mobile-ffmpeg-https'
-    exclude group: 'com.arthenica', module: 'ffmpeg-kit-min'
-    exclude group: 'com.arthenica', module: 'ffmpeg-kit-full'
-}
-`;
-    
-    if (!contents.includes("configurations.all")) {
-      contents = contents.replace(
-        /android\s*{/,
-        `${excludeConfig}\n\nandroid {`
-      );
-    }
+    // ⚠️ DO NOT add "configurations.all { exclude ... }" blocks!
+    // ⚠️ DO NOT exclude com.arthenica modules!
     
     cfg.modResults.contents = contents;
     return cfg;

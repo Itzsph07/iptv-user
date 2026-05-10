@@ -7,37 +7,35 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "channel": "development"
-    },
-    "preview": {
-      "distribution": "internal",
-      "channel": "preview"
+      "channel": "development",
+      "env": {
+        "FFMPEG_AAR_URL": "https://raw.githubusercontent.com/Itzsph07/iptv-user/master/scripts/ffmpeg-kit-full-gpl.aar"
+      }
     },
     "preview-apk": {
       "extends": "preview",
-      "android": {
-        "buildType": "apk"
-      },
+      "android": { "buildType": "apk" },
       "channel": "preview-apk"
     },
     "production": {
       "autoIncrement": true,
-      "channel": "production"
+      "channel": "production",
+      "env": {
+        "FFMPEG_AAR_URL": "https://raw.githubusercontent.com/Itzsph07/iptv-user/master/scripts/ffmpeg-kit-full-gpl.aar"
+      }
     },
     "tv": {
       "extends": "production",
       "channel": "tv",
       "android": {
         "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease",
-        "image": "latest"
+        "gradleCommand": ":app:assembleRelease"
       },
       "env": {
-        "EXPO_TV": "1"
+        "EXPO_TV": "1",
+        "FFMPEG_AAR_URL": "https://raw.githubusercontent.com/Itzsph07/iptv-user/master/scripts/ffmpeg-kit-full-gpl.aar"
       }
     }
   },
-  "submit": {
-    "production": {}
-  }
+  "submit": { "production": {} }
 }
