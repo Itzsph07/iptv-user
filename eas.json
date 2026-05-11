@@ -8,21 +8,18 @@
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
-      "env": {
-        "FFMPEG_AAR_URL": "https://raw.githubusercontent.com/Itzsph07/iptv-user/master/scripts/ffmpeg-kit-full-gpl.aar"
+       "android": {
+        "gradleCommand": ":app:assembleDebug"
       }
     },
     "preview-apk": {
-      "extends": "preview",
+      "extends": "production",
       "android": { "buildType": "apk" },
       "channel": "preview-apk"
     },
     "production": {
       "autoIncrement": true,
-      "channel": "production",
-      "env": {
-        "FFMPEG_AAR_URL": "https://raw.githubusercontent.com/Itzsph07/iptv-user/master/scripts/ffmpeg-kit-full-gpl.aar"
-      }
+      "channel": "production"
     },
     "tv": {
       "extends": "production",
@@ -32,8 +29,7 @@
         "gradleCommand": ":app:assembleRelease"
       },
       "env": {
-        "EXPO_TV": "1",
-        "FFMPEG_AAR_URL": "https://raw.githubusercontent.com/Itzsph07/iptv-user/master/scripts/ffmpeg-kit-full-gpl.aar"
+        "EXPO_TV": "1"
       }
     }
   },

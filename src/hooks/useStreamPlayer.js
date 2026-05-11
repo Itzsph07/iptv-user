@@ -4,14 +4,7 @@ import api from '../services/api';
 import { PROXY_BASE, STREAM_TIMEOUT_MS } from '../utils/constants';
 import { useSettings } from '../context/SettingsContext';
 import * as FileSystem from 'expo-file-system';
-
-// Try to import FFmpeg - will be undefined if not installed yet
-let localFFmpeg = null;
-try {
-  localFFmpeg = require('../services/localFFmpeg').default;
-} catch (e) {
-  console.log('⚠️ localFFmpeg not available yet');
-}
+import localFFmpeg from '../services/LocalFFmpegService';
 
 export const VIDEO_FORMATS = [
   { value: 'copy',  label: 'Original',      desc: 'No transcoding · may green-screen' },
@@ -29,6 +22,17 @@ export const AUDIO_FORMATS = [
   { value: 'eac3',  label: 'E-AC3',    desc: 'Dolby Digital Plus' },
 ];
 
+// Helper function to safely stop FFmpeg
+const safeStopFFmpeg = async () => {
+  try {
+    if (localFFmpeg && typeof localFFmpeg.stopTranscoding === 'function') {
+      await localFFmpeg.stopTranscoding();
+    }
+  } catch (error) {
+    console.error('Error stopping FFmpeg:', error);
+  }
+};
+
 export const useStreamPlayer = () => {
   const { settings } = useSettings();
   
@@ -38,12 +42,13 @@ export const useStreamPlayer = () => {
   const [usingProxy, setUsingProxy] = useState(false);
   const [error, setError] = useState(null);
   const [videoKey, setVideoKey] = useState(0);
-  const [videoFormat, _setVideoFormat] = useState('h264');
-  const [audioFormat, _setAudioFormat] = useState('aac');
+  const [videoFormat, setVideoFormat] = useState('h264');
+  const [audioFormat, setAudioFormat] = useState('aac');
+  const [useSoftwareDecoder, setUseSoftwareDecoder] = useState(false);
   
   const videoFormatRef = useRef('h264');
   const audioFormatRef = useRef('aac');
-  const softwareDecoderRef = useRef(settings.forceSoftwareDecoder);
+  const softwareDecoderRef = useRef(false);
   const videoRef = useRef(null);
   const abortControllerRef = useRef(null);
   const streamTimeoutRef = useRef(null);
@@ -51,22 +56,34 @@ export const useStreamPlayer = () => {
   const currentChannelRef = useRef(null);
   const loadStreamTimeoutRef = useRef(null);
   const localOutputPathRef = useRef(null);
+  const activeSessionIdRef = useRef(null);
 
-  // ===== CLEANUP LOCAL FFMPEG FILES ON UNMOUNT =====
+  // Sync with settings
+  useEffect(() => {
+    setUseSoftwareDecoder(settings.forceSoftwareDecoder ?? false);
+    softwareDecoderRef.current = settings.forceSoftwareDecoder ?? false;
+  }, [settings.forceSoftwareDecoder]);
+
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (localFFmpeg) {
-        localFFmpeg.stopTranscoding();
+      // Cancel any active FFmpeg session
+      if (activeSessionIdRef.current) {
+        const { NativeModules } = require('react-native');
+        NativeModules.FFmpegKitReactNativeModule?.cancelSession(activeSessionIdRef.current);
       }
-      // Clean up old cached files
+      
+      safeStopFFmpeg();
+      
+      // Clean up cached files
       if (localOutputPathRef.current) {
         FileSystem.deleteAsync(localOutputPathRef.current, { idempotent: true }).catch(() => {});
       }
     };
   }, []);
 
+  // Reload when software decoder setting changes
   useEffect(() => {
-    softwareDecoderRef.current = settings.forceSoftwareDecoder;
     console.log(`🔀 Decoder setting synced: ${settings.forceSoftwareDecoder ? 'SOFTWARE (LOCAL FFMPEG)' : 'HARDWARE'}`);
     
     if (currentChannelRef.current) {
@@ -88,8 +105,13 @@ export const useStreamPlayer = () => {
     console.log(`🚀 loadStream: ${channel.name} | video=${vFmt} audio=${aFmt} decoder=${swDec ? 'LOCAL_FFMPEG' : 'HW'} | mode=${useProxy ? 'PROXY' : 'DIRECT'}`);
 
     // Stop any previous local FFmpeg
-    if (localFFmpeg) {
-      await localFFmpeg.stopTranscoding();
+    await safeStopFFmpeg();
+    
+    // Cancel previous native session
+    if (activeSessionIdRef.current) {
+      const { NativeModules } = require('react-native');
+      NativeModules.FFmpegKitReactNativeModule?.cancelSession(activeSessionIdRef.current);
+      activeSessionIdRef.current = null;
     }
 
     // Release previous channel
@@ -104,8 +126,14 @@ export const useStreamPlayer = () => {
       } catch (_) {}
     }
 
-    if (abortControllerRef.current) { abortControllerRef.current.abort(); abortControllerRef.current = null; }
-    if (streamTimeoutRef.current) { clearTimeout(streamTimeoutRef.current); streamTimeoutRef.current = null; }
+    if (abortControllerRef.current) { 
+      abortControllerRef.current.abort(); 
+      abortControllerRef.current = null; 
+    }
+    if (streamTimeoutRef.current) { 
+      clearTimeout(streamTimeoutRef.current); 
+      streamTimeoutRef.current = null; 
+    }
 
     setLoading(true);
     setError(null);
@@ -147,7 +175,7 @@ export const useStreamPlayer = () => {
       // ===================================================================
       // ★★★ LOCAL FFMPEG MODE (Software Decoder ON) ★★★
       // ===================================================================
-      if (swDec && localFFmpeg) {
+      if (swDec) {
         console.log('🎬 LOCAL FFMPEG MODE - Transcoding on device');
         
         const macParam = channel.macAddress ? `&mac=${encodeURIComponent(channel.macAddress)}` : '';
@@ -160,18 +188,21 @@ export const useStreamPlayer = () => {
         console.log(`💾 Output: ${outputPath}`);
         
         setUsingProxy(true);
-        setStreamSource({ uri: proxyUri }); // Show loading state
+        setStreamSource({ uri: proxyUri });
         
-        // Start local FFmpeg in background
-        localFFmpeg.startTranscoding(proxyUri, outputPath).then(result => {
-          if (currentLoadIdRef.current !== loadId) return; // Stale request
+        // Start local FFmpeg transcoding
+        localFFmpeg.execute(
+          `-y -i "${proxyUri}" -c:v libx264 -preset ultrafast -tune zerolatency -c:a aac -f mpegts "${outputPath}"`
+        ).then(result => {
+          if (currentLoadIdRef.current !== loadId) return;
           
-          if (result.success) {
+          if (result.returnCode === 0) {
             console.log('✅ Local FFmpeg success');
             setStreamSource({ uri: outputPath, type: 'mpegts' });
+            setLoading(false);
           } else {
-            console.error('❌ Local FFmpeg failed:', result.error);
-            setError('Local transcoding failed: ' + (result.error || 'Unknown error'));
+            console.error('❌ Local FFmpeg failed:', result.output);
+            setError('Local transcoding failed');
             setLoading(false);
           }
         }).catch(err => {
@@ -182,7 +213,7 @@ export const useStreamPlayer = () => {
         });
         
         setVideoKey(k => k + 1);
-        return; // Don't fall through to proxy/direct code
+        return;
       }
 
       // ===================================================================
@@ -191,7 +222,7 @@ export const useStreamPlayer = () => {
       if (useProxy) {
         const macParam = channel.macAddress ? `&mac=${encodeURIComponent(channel.macAddress)}` : '';
         const typParam = isMag ? '&type=mag' : '&type=xtream';
-        const fmtParam = `&videoFormat=${vFmt}&audioFormat=${aFmt}&container=ts&h264_profile=baseline&h264_level=3.1&force_sw=1`;
+        const fmtParam = `&videoFormat=${vFmt}&audioFormat=${aFmt}&container=ts&h264_profile=baseline&h264_level=3.1`;
         const extraParams = `&reconnect=1&reconnect_streamed=1&reconnect_delay_max=5&timeout=30&seekable=0`;
         const cacheBuster = `&_=${Date.now()}`;
 
@@ -212,7 +243,10 @@ export const useStreamPlayer = () => {
     } catch (err) {
       if (err.name === 'AbortError' || err.code === 'ERR_CANCELED' || err.isCancelled) return;
       console.log(`❌ loadStream error: ${err.message}`);
-      if (currentLoadIdRef.current === loadId) { setError(err.message); setLoading(false); }
+      if (currentLoadIdRef.current === loadId) { 
+        setError(err.message); 
+        setLoading(false); 
+      }
     }
   }, [settings.playbackMode]);
 
@@ -236,7 +270,10 @@ export const useStreamPlayer = () => {
 
   const onLoad = useCallback(() => {
     console.log('✅ Video loaded');
-    if (streamTimeoutRef.current) { clearTimeout(streamTimeoutRef.current); streamTimeoutRef.current = null; }
+    if (streamTimeoutRef.current) { 
+      clearTimeout(streamTimeoutRef.current); 
+      streamTimeoutRef.current = null; 
+    }
     setLoading(false);
     setIsPlaying(true);
     setError(null);
@@ -253,9 +290,9 @@ export const useStreamPlayer = () => {
     }
   }, []);
 
-  const setVideoFormat = useCallback((fmt) => {
+  const handleSetVideoFormat = useCallback((fmt) => {
     videoFormatRef.current = fmt;
-    _setVideoFormat(fmt);
+    setVideoFormat(fmt);
     console.log(`🎬 Video format → ${fmt}`);
     
     if (loadStreamTimeoutRef.current) clearTimeout(loadStreamTimeoutRef.current);
@@ -266,9 +303,9 @@ export const useStreamPlayer = () => {
     }
   }, [loadStream]);
 
-  const setAudioFormat = useCallback((fmt) => {
+  const handleSetAudioFormat = useCallback((fmt) => {
     audioFormatRef.current = fmt;
-    _setAudioFormat(fmt);
+    setAudioFormat(fmt);
     console.log(`🔊 Audio format → ${fmt}`);
     
     if (loadStreamTimeoutRef.current) clearTimeout(loadStreamTimeoutRef.current);
@@ -279,15 +316,41 @@ export const useStreamPlayer = () => {
     }
   }, [loadStream]);
 
+  const toggleSoftwareDecoder = useCallback(() => {
+    const newValue = !softwareDecoderRef.current;
+    softwareDecoderRef.current = newValue;
+    setUseSoftwareDecoder(newValue);
+    console.log(`🔀 Software decoder: ${newValue ? 'ON' : 'OFF'}`);
+    
+    if (loadStreamTimeoutRef.current) clearTimeout(loadStreamTimeoutRef.current);
+    if (currentChannelRef.current) {
+      loadStreamTimeoutRef.current = setTimeout(() => {
+        loadStream(currentChannelRef.current);
+      }, 500);
+    }
+  }, [loadStream]);
+
   return {
-    videoRef, streamSource,
-    loading, isPlaying, usingProxy, error, videoKey,
-    videoFormat, audioFormat, 
-    useSoftwareDecoder: settings.forceSoftwareDecoder,
-    onLoad, onStatusUpdate, setStreamSource,
-    setVideoFormat, setAudioFormat,
+    videoRef,
+    streamSource,
+    loading,
+    isPlaying,
+    usingProxy,
+    error,
+    videoKey,
+    videoFormat,
+    audioFormat,
+    useSoftwareDecoder,
+    onLoad,
+    onStatusUpdate,
+    setStreamSource,
+    setVideoFormat: handleSetVideoFormat,
+    setAudioFormat: handleSetAudioFormat,
+    toggleSoftwareDecoder,
     availableVideoFormats: VIDEO_FORMATS,
     availableAudioFormats: AUDIO_FORMATS,
-    loadStream, releaseStream, prefetchStream,
+    loadStream,
+    releaseStream,
+    prefetchStream,
   };
 };
