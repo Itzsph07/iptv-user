@@ -79,7 +79,6 @@
     },
     "plugins": [
       "expo-build-properties",
-      "./plugins/localFFmpeg.js",
       [
         "@react-native-tvos/config-tv",
         {
