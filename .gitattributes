@@ -1,0 +1,4 @@
+# 1. Create .gitattributes
+echo # Force LF line endings for shell scripts > .gitattributes
+echo gradlew text eol=lf >> .gitattributes
+echo *.sh text eol=lf >> .gitattributes
