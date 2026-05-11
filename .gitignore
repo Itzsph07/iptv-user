@@ -37,5 +37,4 @@ echo ".env"
 
 # generated native folders
 /ios
-/android
-"android/app/libs/ffmpeg-kit-full-gpl.aar" 
+
