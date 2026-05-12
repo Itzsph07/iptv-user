@@ -1,0 +1,45 @@
+diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt b/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
+index e9cf5ab..92f454a 100644
+--- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
++++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
+@@ -83,6 +83,7 @@ class Source {
+      * buffering configuration
+      */
+     var bufferConfig = BufferConfig()
++    var useSoftwareDecoder: Boolean = false
+ 
+     /**
+      * The list of sideLoaded text tracks
+@@ -242,6 +243,7 @@ class Source {
+             source.sideLoadedTextTracks = SideLoadedTextTrackList.parse(safeGetArray(src, PROP_SRC_TEXT_TRACKS))
+             source.minLoadRetryCount = safeGetInt(src, PROP_SRC_MIN_LOAD_RETRY_COUNT, 3)
+             source.bufferConfig = BufferConfig.parse(safeGetMap(src, PROP_SRC_BUFFER_CONFIG))
++            source.useSoftwareDecoder = safeGetBool(src, "useTextureView", false)
+ 
+             val propSrcHeadersArray = safeGetArray(src, PROP_SRC_HEADERS)
+             if (propSrcHeadersArray != null) {
+diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
+index e16ac96..58c6b6b 100644
+--- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
++++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
+@@ -730,11 +730,15 @@ public class ReactExoplayerView extends FrameLayout implements
+             this.bandwidthMeter = config.getBandwidthMeter();
+         }
+ 
+-        DefaultRenderersFactory renderersFactory =
+-                new DefaultRenderersFactory(getContext())
+-                        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
+-                        .setEnableDecoderFallback(true)
+-                        .forceEnableMediaCodecAsynchronousQueueing();
++       DefaultRenderersFactory renderersFactory =
++        new DefaultRenderersFactory(getContext())
++                .setExtensionRendererMode(
++                    source.getUseTextureView()
++                        ? DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
++                        : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
++                )
++                .setEnableDecoderFallback(true)
++                .forceEnableMediaCodecAsynchronousQueueing();
+                 
+         DefaultMediaSourceFactory mediaSourceFactory;
+         
