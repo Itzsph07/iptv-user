@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
+    "postinstall": "patch-package",
     "start": "npx expo start --dev-client",
     "android": "npx expo run:android",
     "eas-build": "eas build --platform android --profile development",
