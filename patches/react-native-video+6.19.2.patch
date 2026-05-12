@@ -21,10 +21,10 @@ index e9cf5ab..b273b96 100644
              val propSrcHeadersArray = safeGetArray(src, PROP_SRC_HEADERS)
              if (propSrcHeadersArray != null) {
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-index e16ac96..5c16214 100644
+index e16ac96..2dcfe4f 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-@@ -730,11 +730,50 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -730,11 +730,33 @@ public class ReactExoplayerView extends FrameLayout implements
              this.bandwidthMeter = config.getBandwidthMeter();
          }
  
@@ -33,50 +33,33 @@ index e16ac96..5c16214 100644
 -                        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
 -                        .setEnableDecoderFallback(true)
 -                        .forceEnableMediaCodecAsynchronousQueueing();
-+DefaultRenderersFactory renderersFactory = source.useSoftwareDecoder
-+    ? new DefaultRenderersFactory(getContext()) {
-+        @Override
-+        protected void buildVideoRenderers(
-+            Context context,
-+            int extensionRendererMode,
-+            MediaCodecSelector mediaCodecSelector,
-+            boolean enableDecoderFallback,
-+            Handler eventHandler,
-+            VideoRendererEventListener eventListener,
-+            long allowedVideoJoiningTimeMs,
-+            java.util.ArrayList<Renderer> out
-+        ) {
-+            // Use a MediaCodecSelector that skips hardware decoders
-+            MediaCodecSelector softwareOnlySelector = (mimeType, requiresSecureDecoder, requiresTunnelingDecoder) -> {
-+                java.util.List<androidx.media3.exoplayer.mediacodec.MediaCodecInfo> allDecoders =
-+                    MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder);
-+                java.util.List<androidx.media3.exoplayer.mediacodec.MediaCodecInfo> softwareDecoders = new java.util.ArrayList<>();
-+                for (androidx.media3.exoplayer.mediacodec.MediaCodecInfo info : allDecoders) {
-+                    if (info.softwareOnly) {
-+                        softwareDecoders.add(info);
-+                    }
++DefaultRenderersFactory renderersFactory =
++    new DefaultRenderersFactory(getContext())
++        .setExtensionRendererMode(
++            source.useSoftwareDecoder
++                ? DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
++                : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
++        )
++        .setEnableDecoderFallback(true);
++
++// If software decoder mode, filter out Qualcomm hardware decoders
++if (source.useSoftwareDecoder) {
++    renderersFactory.setMediaCodecSelector(
++        (mimeType, requiresSecureDecoder, requiresTunnelingDecoder) -> {
++            List<MediaCodecInfo> allDecoders = MediaCodecSelector.DEFAULT
++                .getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder);
++            List<MediaCodecInfo> filtered = new ArrayList<>();
++            for (MediaCodecInfo info : allDecoders) {
++                // Skip Qualcomm hardware decoders that crash
++                String name = info.name != null ? info.name.toLowerCase() : "";
++                if (!name.contains("qti") && !name.contains("qcom")) {
++                    filtered.add(info);
 +                }
-+                // If no pure software decoder found, use all but prefer non-Qualcomm
-+                if (softwareDecoders.isEmpty()) {
-+                    java.util.List<androidx.media3.exoplayer.mediacodec.MediaCodecInfo> nonQti = new java.util.ArrayList<>();
-+                    for (androidx.media3.exoplayer.mediacodec.MediaCodecInfo info : allDecoders) {
-+                        if (!info.name.contains("qti") && !info.name.contains("qcom")) {
-+                            nonQti.add(info);
-+                        }
-+                    }
-+                    return nonQti.isEmpty() ? allDecoders : nonQti;
-+                }
-+                return softwareDecoders;
-+            };
-+            super.buildVideoRenderers(context, extensionRendererMode, softwareOnlySelector,
-+                true, eventHandler, eventListener, allowedVideoJoiningTimeMs, out);
++            }
++            return filtered.isEmpty() ? allDecoders : filtered;
 +        }
-+    }
-+    .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-+    .setEnableDecoderFallback(true)
-+    : new DefaultRenderersFactory(getContext())
-+        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
-+        .setEnableDecoderFallback(false);
-         
++    );
++}
+ 
          DefaultMediaSourceFactory mediaSourceFactory;
          
