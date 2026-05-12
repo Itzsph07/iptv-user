@@ -10,7 +10,9 @@
       "deploymentTarget": "15.1",
       "supportsTablet": true,
       "requireFullScreen": true,
-      "orientation": ["landscape"],
+      "orientation": [
+        "landscape"
+      ],
       "bundleIdentifier": "com.anonymous.MesaIPTV",
       "icon": "./assets/mesaIPTV.png",
       "splash": {
@@ -31,11 +33,16 @@
       "roundIcon": "./assets/mesaIPTV.png",
       "edgeToEdgeEnabled": true,
       "package": "com.anonymous.MesaIPTV",
-      "orientation": ["landscape"],
+      "orientation": [
+        "landscape"
+      ],
       "intentFilters": [
         {
           "action": "MAIN",
-          "category": ["LAUNCHER", "LEANBACK_LAUNCHER"]
+          "category": [
+            "LAUNCHER",
+            "LEANBACK_LAUNCHER"
+          ]
         }
       ],
       "splash": {
@@ -71,8 +78,7 @@
         "projectId": "e82b40d7-4454-480a-bd93-d7f36c6b7872"
       }
     },
-    
-   "runtimeVersion": "1.0.0",
+    "runtimeVersion": "1.0.0",
     "updates": {
       "url": "https://u.expo.dev/e82b40d7-4454-480a-bd93-d7f36c6b7872"
     },
@@ -95,10 +101,12 @@
             "useExoplayerHls": true,
             "useExoplayerRtsp": false,
             "useExoplayerSmoothStreaming": false,
-            "useExoplayerDash": false
+            "useExoplayerDash": false,
+            "useExoplayerSoftwareDecoder": true
           }
         }
-      ]
+      ],
+      "expo-font"
     ],
     "owner": "mesashop"
   }

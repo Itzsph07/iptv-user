@@ -16,8 +16,6 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
 
-// 🔴 ADD THIS IMPORT - CRITICAL!
-import com.arthenica.ffmpegkit.reactnative.FFmpegKitReactNativePackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -26,8 +24,6 @@ class MainApplication : Application(), ReactApplication {
         object : DefaultReactNativeHost(this) {
             override fun getPackages(): List<ReactPackage> =
                 PackageList(this).packages.apply {
-                    // 🔴 ADD THIS LINE - Registers FFmpegKit
-                    add(FFmpegKitReactNativePackage())
                 }
 
             override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
