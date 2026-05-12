@@ -19,10 +19,10 @@ index e9cf5ab..92f454a 100644
              val propSrcHeadersArray = safeGetArray(src, PROP_SRC_HEADERS)
              if (propSrcHeadersArray != null) {
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-index e16ac96..58c6b6b 100644
+index e16ac96..b485930 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-@@ -730,11 +730,15 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -730,12 +730,15 @@ public class ReactExoplayerView extends FrameLayout implements
              this.bandwidthMeter = config.getBandwidthMeter();
          }
  
@@ -31,15 +31,16 @@ index e16ac96..58c6b6b 100644
 -                        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
 -                        .setEnableDecoderFallback(true)
 -                        .forceEnableMediaCodecAsynchronousQueueing();
-+       DefaultRenderersFactory renderersFactory =
-+        new DefaultRenderersFactory(getContext())
-+                .setExtensionRendererMode(
-+                    source.getUseTextureView()
-+                        ? DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
-+                        : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
-+                )
-+                .setEnableDecoderFallback(true)
-+                .forceEnableMediaCodecAsynchronousQueueing();
-                 
+-
++DefaultRenderersFactory renderersFactory =
++    new DefaultRenderersFactory(getContext())
++        .setExtensionRendererMode(
++            source.useSoftwareDecoder  // ← FIXED
++                ? DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
++                : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
++        )
++        .setEnableDecoderFallback(true)
++        .forceEnableMediaCodecAsynchronousQueueing();
          DefaultMediaSourceFactory mediaSourceFactory;
          
+         if (isDaiRequest(source)) {
