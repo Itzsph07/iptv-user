@@ -21,10 +21,18 @@ index e9cf5ab..b273b96 100644
              val propSrcHeadersArray = safeGetArray(src, PROP_SRC_HEADERS)
              if (propSrcHeadersArray != null) {
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-index e16ac96..2dcfe4f 100644
+index e16ac96..e82e6ed 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-@@ -730,11 +730,33 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -81,6 +81,7 @@ import androidx.media3.exoplayer.ima.ImaServerSideAdInsertionMediaSource;
+ import androidx.media3.exoplayer.ima.ImaServerSideAdInsertionUriBuilder;
+ import androidx.media3.exoplayer.mediacodec.MediaCodecInfo;
+ import androidx.media3.exoplayer.mediacodec.MediaCodecUtil;
++import androidx.media3.exoplayer.mediacodec.MediaCodecSelector;
+ import androidx.media3.exoplayer.rtsp.RtspMediaSource;
+ import androidx.media3.exoplayer.smoothstreaming.DefaultSsChunkSource;
+ import androidx.media3.exoplayer.smoothstreaming.SsMediaSource;
+@@ -730,11 +731,34 @@ public class ReactExoplayerView extends FrameLayout implements
              this.bandwidthMeter = config.getBandwidthMeter();
          }
  
@@ -45,18 +53,19 @@ index e16ac96..2dcfe4f 100644
 +// If software decoder mode, filter out Qualcomm hardware decoders
 +if (source.useSoftwareDecoder) {
 +    renderersFactory.setMediaCodecSelector(
-+        (mimeType, requiresSecureDecoder, requiresTunnelingDecoder) -> {
-+            List<MediaCodecInfo> allDecoders = MediaCodecSelector.DEFAULT
-+                .getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder);
-+            List<MediaCodecInfo> filtered = new ArrayList<>();
-+            for (MediaCodecInfo info : allDecoders) {
-+                // Skip Qualcomm hardware decoders that crash
-+                String name = info.name != null ? info.name.toLowerCase() : "";
-+                if (!name.contains("qti") && !name.contains("qcom")) {
-+                    filtered.add(info);
++        new MediaCodecSelector() {
++            @Override
++            public List<MediaCodecInfo> getDecoderInfos(String mimeType, boolean requiresSecureDecoder, boolean requiresTunnelingDecoder) throws MediaCodecUtil.DecoderQueryException {
++                List<MediaCodecInfo> allDecoders = MediaCodecUtil.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder);
++                List<MediaCodecInfo> filtered = new ArrayList<>();
++                for (MediaCodecInfo info : allDecoders) {
++                    String name = info.name != null ? info.name.toLowerCase() : "";
++                    if (!name.contains("qti") && !name.contains("qcom")) {
++                        filtered.add(info);
++                    }
 +                }
++                return filtered.isEmpty() ? allDecoders : filtered;
 +            }
-+            return filtered.isEmpty() ? allDecoders : filtered;
 +        }
 +    );
 +}
