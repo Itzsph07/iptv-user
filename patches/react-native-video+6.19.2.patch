@@ -21,7 +21,7 @@ index e9cf5ab..c6a4e93 100644
              val propSrcHeadersArray = safeGetArray(src, PROP_SRC_HEADERS)
              if (propSrcHeadersArray != null) {
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-index e16ac96..17b7095 100644
+index e16ac96..b485930 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 @@ -730,12 +730,15 @@ public class ReactExoplayerView extends FrameLayout implements
@@ -37,7 +37,7 @@ index e16ac96..17b7095 100644
 +DefaultRenderersFactory renderersFactory =
 +    new DefaultRenderersFactory(getContext())
 +        .setExtensionRendererMode(
-+            source.getUseSoftwareDecoder  // ← FIXED
++            source.useSoftwareDecoder  // ← FIXED
 +                ? DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
 +                : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
 +        )
