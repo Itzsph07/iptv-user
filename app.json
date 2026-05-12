@@ -54,7 +54,11 @@
         "xhdpi": "./assets/splash-landscape.png",
         "xxhdpi": "./assets/splash-landscape.png",
         "xxxhdpi": "./assets/splash-landscape.png"
-      }
+      },
+      "permissions": [
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "androidTV": {
       "banner": "./assets/tv-banner.png",
@@ -75,13 +79,11 @@
     },
     "extra": {
       "eas": {
-        "projectId": "e82b40d7-4454-480a-bd93-d7f36c6b7872"
+        "projectId": "51e79fbc-a520-4f0d-9728-3f206a9ccc72"
       }
     },
     "runtimeVersion": "1.0.0",
-    "updates": {
-      "url": "https://u.expo.dev/e82b40d7-4454-480a-bd93-d7f36c6b7872"
-    },
+    "updates": {},
     "plugins": [
       "expo-build-properties",
       [
@@ -108,6 +110,6 @@
       ],
       "expo-font"
     ],
-    "owner": "mesashop"
+    "owner": "ggbosi"
   }
 }

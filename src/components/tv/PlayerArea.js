@@ -78,53 +78,54 @@ export const PlayerArea = ({
         {/* ── VIDEO ─────────────────────────────────────────────────────── */}
         {streamSource ? (
           <Video
-            key={videoKey}
-            ref={videoRef}
-            style={s.video}
-            source={{ uri: streamSource.uri }}
-            resizeMode="stretch"
-            paused={false}
-            muted={false}
-            volume={1.0}
-            repeat={false}
-            controls={false}
-            hideShutterView={true}
-            disableFocus={true}
-            addTagUrl="" 
-            decoderPriority={useSoftwareDecoder ? "SOFTWARE" : "HARDWARE"}
-            bufferConfig={{
-              minBufferMs: 15000,
-              maxBufferMs: 50000,
-              bufferForPlaybackMs: 2500,
-              bufferForPlaybackAfterRebufferMs: 5000,
-            }}
-            onLoad={() => {
-              console.log('✅ Video loaded with decoder priority:', useSoftwareDecoder ? 'SOFTWARE' : 'HARDWARE');
-              setIsActuallyPlaying(true);
-              if (onLoad) onLoad({ isLoaded: true });
-            }}
-            onProgress={(data) => {
-              if (onStatusUpdate) {
-                onStatusUpdate({
-                  isLoaded: true,
-                  isPlaying: !data.seekableDuration === false,
-                  positionMillis: data.currentTime * 1000,
-                  durationMillis: data.seekableDuration * 1000,
-                });
-              }
-            }}
-            onError={(videoError) => {
-              console.log('❌ Video error:', videoError);
-              const errorMessage = videoError.error?.localizedDescription || 'Playback failed';
-              if (onStatusUpdate) {
-                onStatusUpdate({ error: errorMessage, isLoaded: false });
-              }
-            }}
-            onEnd={() => {
-              console.log('Video ended');
-              setIsActuallyPlaying(false);
-            }}
-          />
+  key={videoKey}
+  ref={videoRef}
+  style={s.video}
+  source={streamSource}
+  resizeMode="stretch"
+  paused={false}
+  muted={false}
+  volume={1.0}
+  repeat={false}
+  controls={false}
+  hideShutterView={true}
+  disableFocus={true}
+  addTagUrl="" 
+  useSoftwareDecoder={useSoftwareDecoder}
+  decoderPriority={useSoftwareDecoder ? "SOFTWARE" : "HARDWARE"}
+  bufferConfig={{
+    minBufferMs: 15000,
+    maxBufferMs: 50000,
+    bufferForPlaybackMs: 2500,
+    bufferForPlaybackAfterRebufferMs: 5000,
+  }}
+  onLoad={() => {
+    console.log('✅ Video loaded');
+    setIsActuallyPlaying(true);
+    if (onLoad) onLoad({ isLoaded: true });
+  }}
+  onProgress={(data) => {
+    if (onStatusUpdate) {
+      onStatusUpdate({
+        isLoaded: true,
+        isPlaying: !data.seekableDuration === false,
+        positionMillis: data.currentTime * 1000,
+        durationMillis: data.seekableDuration * 1000,
+      });
+    }
+  }}
+  onError={(videoError) => {
+    console.log('❌ Video error:', videoError);
+    const errorMessage = videoError.error?.localizedDescription || 'Playback failed';
+    if (onStatusUpdate) {
+      onStatusUpdate({ error: errorMessage, isLoaded: false });
+    }
+  }}
+  onEnd={() => {
+    console.log('Video ended');
+    setIsActuallyPlaying(false);
+  }}
+/>
         ) : (
           <View style={s.idle}>
             <View style={s.idleIconWrap}>

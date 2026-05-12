@@ -3,8 +3,6 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import api from '../services/api';
 import { PROXY_BASE, STREAM_TIMEOUT_MS } from '../utils/constants';
 import { useSettings } from '../context/SettingsContext';
-import * as FileSystem from 'expo-file-system';
-import localFFmpeg from '../services/LocalFFmpegService';
 
 export const VIDEO_FORMATS = [
   { value: 'copy',  label: 'Original',      desc: 'No transcoding · may green-screen' },
@@ -21,17 +19,6 @@ export const AUDIO_FORMATS = [
   { value: 'ac3',   label: 'AC3',      desc: 'Dolby Digital' },
   { value: 'eac3',  label: 'E-AC3',    desc: 'Dolby Digital Plus' },
 ];
-
-// Helper function to safely stop FFmpeg
-const safeStopFFmpeg = async () => {
-  try {
-    if (localFFmpeg && typeof localFFmpeg.stopTranscoding === 'function') {
-      await localFFmpeg.stopTranscoding();
-    }
-  } catch (error) {
-    console.error('Error stopping FFmpeg:', error);
-  }
-};
 
 export const useStreamPlayer = () => {
   const { settings } = useSettings();
@@ -55,8 +42,6 @@ export const useStreamPlayer = () => {
   const currentLoadIdRef = useRef(0);
   const currentChannelRef = useRef(null);
   const loadStreamTimeoutRef = useRef(null);
-  const localOutputPathRef = useRef(null);
-  const activeSessionIdRef = useRef(null);
 
   // Sync with settings
   useEffect(() => {
@@ -67,25 +52,18 @@ export const useStreamPlayer = () => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      // Cancel any active FFmpeg session
-      if (activeSessionIdRef.current) {
-        const { NativeModules } = require('react-native');
-        NativeModules.FFmpegKitReactNativeModule?.cancelSession(activeSessionIdRef.current);
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
-      
-      safeStopFFmpeg();
-      
-      // Clean up cached files
-      if (localOutputPathRef.current) {
-        FileSystem.deleteAsync(localOutputPathRef.current, { idempotent: true }).catch(() => {});
+      if (streamTimeoutRef.current) {
+        clearTimeout(streamTimeoutRef.current);
       }
     };
   }, []);
 
   // Reload when software decoder setting changes
   useEffect(() => {
-    console.log(`🔀 Decoder setting synced: ${settings.forceSoftwareDecoder ? 'SOFTWARE (LOCAL FFMPEG)' : 'HARDWARE'}`);
-    
+    console.log(`🔀 Decoder: ${settings.forceSoftwareDecoder ? 'SOFTWARE (ExoPlayer)' : 'HARDWARE'}`);
     if (currentChannelRef.current) {
       setTimeout(() => loadStream(currentChannelRef.current), 100);
     }
@@ -102,17 +80,7 @@ export const useStreamPlayer = () => {
     const swDec = softwareDecoderRef.current;
     const useProxy = settings.playbackMode === 'proxy';
 
-    console.log(`🚀 loadStream: ${channel.name} | video=${vFmt} audio=${aFmt} decoder=${swDec ? 'LOCAL_FFMPEG' : 'HW'} | mode=${useProxy ? 'PROXY' : 'DIRECT'}`);
-
-    // Stop any previous local FFmpeg
-    await safeStopFFmpeg();
-    
-    // Cancel previous native session
-    if (activeSessionIdRef.current) {
-      const { NativeModules } = require('react-native');
-      NativeModules.FFmpegKitReactNativeModule?.cancelSession(activeSessionIdRef.current);
-      activeSessionIdRef.current = null;
-    }
+    console.log(`🚀 loadStream: ${channel.name} | video=${vFmt} audio=${aFmt} decoder=${swDec ? 'SOFTWARE' : 'HW'} | mode=${useProxy ? 'PROXY' : 'DIRECT'}`);
 
     // Release previous channel
     if (currentChannelRef.current) {
@@ -167,73 +135,46 @@ export const useStreamPlayer = () => {
 
       streamTimeoutRef.current = setTimeout(() => {
         if (currentLoadIdRef.current === loadId) {
-          setError('Stream timed out — try enabling Software Decoder in Settings');
+          setError('Stream timed out');
           setLoading(false);
         }
       }, STREAM_TIMEOUT_MS);
 
       // ===================================================================
-      // ★★★ LOCAL FFMPEG MODE (Software Decoder ON) ★★★
+      // ★ SOFTWARE DECODER MODE - ExoPlayer with useTextureView=true ★
       // ===================================================================
       if (swDec) {
-        console.log('🎬 LOCAL FFMPEG MODE - Transcoding on device');
-        
-        const macParam = channel.macAddress ? `&mac=${encodeURIComponent(channel.macAddress)}` : '';
-        const proxyUri = `${PROXY_BASE}?url=${encodeURIComponent(plain)}${macParam}&channelId=${channelId}&_=${Date.now()}`;
-        
-        const outputPath = `${FileSystem.cacheDirectory}stream_${loadId}.ts`;
-        localOutputPathRef.current = outputPath;
-        
-        console.log(`📡 Proxy URL: ${proxyUri.substring(0, 80)}...`);
-        console.log(`💾 Output: ${outputPath}`);
-        
-        setUsingProxy(true);
-        setStreamSource({ uri: proxyUri });
-        
-        // Start local FFmpeg transcoding
-        localFFmpeg.execute(
-          `-y -i "${proxyUri}" -c:v libx264 -preset ultrafast -tune zerolatency -c:a aac -f mpegts "${outputPath}"`
-        ).then(result => {
-          if (currentLoadIdRef.current !== loadId) return;
-          
-          if (result.returnCode === 0) {
-            console.log('✅ Local FFmpeg success');
-            setStreamSource({ uri: outputPath, type: 'mpegts' });
-            setLoading(false);
-          } else {
-            console.error('❌ Local FFmpeg failed:', result.output);
-            setError('Local transcoding failed');
-            setLoading(false);
-          }
-        }).catch(err => {
-          if (currentLoadIdRef.current !== loadId) return;
-          console.error('❌ Local FFmpeg exception:', err.message);
-          setError('Local FFmpeg error: ' + err.message);
-          setLoading(false);
+        console.log('🎬 SOFTWARE DECODER MODE - ExoPlayer');
+        setUsingProxy(false);
+        setStreamSource({ 
+          uri: plain,
+          headers: { 
+            'User-Agent': 'Lavf53.32.100',
+            'Connection': 'keep-alive'
+          },
+          type: plain.includes('.m3u8') ? 'm3u8' : 'mpegts',
         });
-        
         setVideoKey(k => k + 1);
         return;
       }
 
       // ===================================================================
-      // PROXY MODE (Server-side, no local FFmpeg)
+      // PROXY MODE (Server-side transcoding)
       // ===================================================================
       if (useProxy) {
         const macParam = channel.macAddress ? `&mac=${encodeURIComponent(channel.macAddress)}` : '';
         const typParam = isMag ? '&type=mag' : '&type=xtream';
-        const fmtParam = `&videoFormat=${vFmt}&audioFormat=${aFmt}&container=ts&h264_profile=baseline&h264_level=3.1`;
+        const fmtParam = `&videoFormat=${vFmt}&audioFormat=${aFmt}&container=ts&h264_profile=baseline&h264_level=3.1&force_sw=1`;
         const extraParams = `&reconnect=1&reconnect_streamed=1&reconnect_delay_max=5&timeout=30&seekable=0`;
-        const cacheBuster = `&_=${Date.now()}`;
 
-        const proxyUri = `${PROXY_BASE}?url=${encodeURIComponent(plain)}${macParam}${typParam}&channelId=${channelId}${fmtParam}${cacheBuster}${extraParams}`;
+        const proxyUri = `${PROXY_BASE}?url=${encodeURIComponent(plain)}${macParam}${typParam}&channelId=${channelId}${fmtParam}${extraParams}`;
 
-        console.log(`📺 PROXY MODE (SERVER) | video: ${vFmt}`);
+        console.log(`📺 PROXY MODE (SERVER)`);
         setUsingProxy(true);
         setStreamSource({ uri: proxyUri });
       } else {
         // DIRECT MODE
-        console.log(`📺 DIRECT MODE | URL: ${plain.substring(0, 120)}...`);
+        console.log(`📺 DIRECT MODE`);
         setUsingProxy(false);
         setStreamSource({ uri: plain });
       }
@@ -293,26 +234,18 @@ export const useStreamPlayer = () => {
   const handleSetVideoFormat = useCallback((fmt) => {
     videoFormatRef.current = fmt;
     setVideoFormat(fmt);
-    console.log(`🎬 Video format → ${fmt}`);
-    
     if (loadStreamTimeoutRef.current) clearTimeout(loadStreamTimeoutRef.current);
     if (currentChannelRef.current) {
-      loadStreamTimeoutRef.current = setTimeout(() => {
-        loadStream(currentChannelRef.current);
-      }, 500);
+      loadStreamTimeoutRef.current = setTimeout(() => loadStream(currentChannelRef.current), 500);
     }
   }, [loadStream]);
 
   const handleSetAudioFormat = useCallback((fmt) => {
     audioFormatRef.current = fmt;
     setAudioFormat(fmt);
-    console.log(`🔊 Audio format → ${fmt}`);
-    
     if (loadStreamTimeoutRef.current) clearTimeout(loadStreamTimeoutRef.current);
     if (currentChannelRef.current) {
-      loadStreamTimeoutRef.current = setTimeout(() => {
-        loadStream(currentChannelRef.current);
-      }, 500);
+      loadStreamTimeoutRef.current = setTimeout(() => loadStream(currentChannelRef.current), 500);
     }
   }, [loadStream]);
 
@@ -320,37 +253,21 @@ export const useStreamPlayer = () => {
     const newValue = !softwareDecoderRef.current;
     softwareDecoderRef.current = newValue;
     setUseSoftwareDecoder(newValue);
-    console.log(`🔀 Software decoder: ${newValue ? 'ON' : 'OFF'}`);
-    
     if (loadStreamTimeoutRef.current) clearTimeout(loadStreamTimeoutRef.current);
     if (currentChannelRef.current) {
-      loadStreamTimeoutRef.current = setTimeout(() => {
-        loadStream(currentChannelRef.current);
-      }, 500);
+      loadStreamTimeoutRef.current = setTimeout(() => loadStream(currentChannelRef.current), 500);
     }
   }, [loadStream]);
 
   return {
-    videoRef,
-    streamSource,
-    loading,
-    isPlaying,
-    usingProxy,
-    error,
-    videoKey,
-    videoFormat,
-    audioFormat,
-    useSoftwareDecoder,
-    onLoad,
-    onStatusUpdate,
-    setStreamSource,
+    videoRef, streamSource, loading, isPlaying, usingProxy, error, videoKey,
+    videoFormat, audioFormat, useSoftwareDecoder,
+    onLoad, onStatusUpdate, setStreamSource,
     setVideoFormat: handleSetVideoFormat,
     setAudioFormat: handleSetAudioFormat,
     toggleSoftwareDecoder,
     availableVideoFormats: VIDEO_FORMATS,
     availableAudioFormats: AUDIO_FORMATS,
-    loadStream,
-    releaseStream,
-    prefetchStream,
+    loadStream, releaseStream, prefetchStream,
   };
 };
