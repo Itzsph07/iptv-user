@@ -1,16 +1,18 @@
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt b/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
-index e9cf5ab..92f454a 100644
+index e9cf5ab..c6a4e93 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
-@@ -83,6 +83,7 @@ class Source {
-      * buffering configuration
+@@ -84,6 +84,9 @@ class Source {
       */
      var bufferConfig = BufferConfig()
+     
++    @JvmField
 +    var useSoftwareDecoder: Boolean = false
- 
++
      /**
       * The list of sideLoaded text tracks
-@@ -242,6 +243,7 @@ class Source {
+      */
+@@ -242,6 +245,7 @@ class Source {
              source.sideLoadedTextTracks = SideLoadedTextTrackList.parse(safeGetArray(src, PROP_SRC_TEXT_TRACKS))
              source.minLoadRetryCount = safeGetInt(src, PROP_SRC_MIN_LOAD_RETRY_COUNT, 3)
              source.bufferConfig = BufferConfig.parse(safeGetMap(src, PROP_SRC_BUFFER_CONFIG))
@@ -19,7 +21,7 @@ index e9cf5ab..92f454a 100644
              val propSrcHeadersArray = safeGetArray(src, PROP_SRC_HEADERS)
              if (propSrcHeadersArray != null) {
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-index e16ac96..b485930 100644
+index e16ac96..4cf02f7 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 @@ -730,12 +730,15 @@ public class ReactExoplayerView extends FrameLayout implements
@@ -35,7 +37,7 @@ index e16ac96..b485930 100644
 +DefaultRenderersFactory renderersFactory =
 +    new DefaultRenderersFactory(getContext())
 +        .setExtensionRendererMode(
-+            source.useSoftwareDecoder  // ← FIXED
++            source.getUseSoftwareDecoder()  // ← FIXED
 +                ? DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER
 +                : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
 +        )
