@@ -22,8 +22,7 @@ index e9cf5ab..c9cbb1f 100644
              )
      }
  
-@@ -242,6 +246,7 @@ class Source {
-             source.sideLoadedTextTracks = SideLoadedTextTrackList.parse(safeGetArray(src, PROP_SRC_TEXT_TRACKS))
+@@ -242,6 +246,7 @@ class Source {\n             source.sideLoadedTextTracks = SideLoadedTextTrackList.parse(safeGetArray(src, PROP_SRC_TEXT_TRACKS))
              source.minLoadRetryCount = safeGetInt(src, PROP_SRC_MIN_LOAD_RETRY_COUNT, 3)
              source.bufferConfig = BufferConfig.parse(safeGetMap(src, PROP_SRC_BUFFER_CONFIG))
 +            source.useSoftwareDecoder = safeGetBool(src, "useSoftwareDecoder", false)
@@ -46,12 +45,12 @@ index e16ac96..563787d 100644
      }
  
      private void initializePlayerCore(ReactExoplayerView self) {
-+        android.util.Log.w("DECODER_DEBUG", "🔧 useSoftwareDecoder = " + source.useSoftwareDecoder);    
++        android.util.Log.w("DECODER_DEBUG", "🔧 useSoftwareDecoder = " + source.useSoftwareDecoder);
 +
          ExoTrackSelection.Factory videoTrackSelectionFactory = new AdaptiveTrackSelection.Factory();
          self.trackSelector = new DefaultTrackSelector(getContext(), videoTrackSelectionFactory);
          self.trackSelector.setParameters(trackSelector.buildUponParameters()
-@@ -730,11 +733,35 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -730,11 +733,40 @@ public class ReactExoplayerView extends FrameLayout implements
              this.bandwidthMeter = config.getBandwidthMeter();
          }
  
@@ -60,35 +59,43 @@ index e16ac96..563787d 100644
 -                        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
 -                        .setEnableDecoderFallback(true)
 -                        .forceEnableMediaCodecAsynchronousQueueing();
-+DefaultRenderersFactory renderersFactory =
-+    new DefaultRenderersFactory(getContext())
-+        .setExtensionRendererMode(
-+            source.useSoftwareDecoder
-+                ? DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
-+                : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
-+        )
-+        .setEnableDecoderFallback(true);
++        DefaultRenderersFactory renderersFactory =
++            new DefaultRenderersFactory(getContext())
++                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
++                .setEnableDecoderFallback(true);
 +
-+// If software decoder mode, filter out Qualcomm hardware decoders
-+if (source.useSoftwareDecoder) {
-+renderersFactory.setMediaCodecSelector(
-+    new MediaCodecSelector() {
-+        @Override
-+        public List<MediaCodecInfo> getDecoderInfos(String mimeType, boolean requiresSecureDecoder, boolean requiresTunnelingDecoder) throws MediaCodecUtil.DecoderQueryException {
-+            List<MediaCodecInfo> all = MediaCodecUtil.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder);
-+            List<MediaCodecInfo> sw = new ArrayList<>();
-+            for (MediaCodecInfo info : all) {
-+                String n = info.name == null ? "" : info.name.toLowerCase();
-+                // Software-only allow-list: Google's c2.android.* + legacy OMX.google.*
-+                if (n.startsWith("c2.android.") || n.startsWith("omx.google.") || n.contains(".sw.")) {
-+                    sw.add(info);
++        if (source.useSoftwareDecoder) {
++            android.util.Log.w("DECODER_DEBUG", "🎯 Installing software-only MediaCodecSelector");
++            renderersFactory.setMediaCodecSelector(
++                new MediaCodecSelector() {
++                    @Override
++                    public List<MediaCodecInfo> getDecoderInfos(
++                            String mimeType,
++                            boolean requiresSecureDecoder,
++                            boolean requiresTunnelingDecoder)
++                            throws MediaCodecUtil.DecoderQueryException {
++                        List<MediaCodecInfo> all =
++                            MediaCodecUtil.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder);
++                        // Use Media3's built-in softwareOnly field — most reliable approach
++                        List<MediaCodecInfo> sw = new ArrayList<>();
++                        List<MediaCodecInfo> nonQti = new ArrayList<>();
++                        for (MediaCodecInfo info : all) {
++                            if (info.softwareOnly) {
++                                sw.add(info);
++                            }
++                            String n = info.name == null ? "" : info.name.toLowerCase();
++                            if (!n.contains("qti") && !n.contains("qcom") && !n.contains("qualcomm")) {
++                                nonQti.add(info);
++                            }
++                        }
++                        android.util.Log.w("DECODER_DEBUG", "mimeType=" + mimeType + " sw=" + sw.size() + " nonQti=" + nonQti.size() + " all=" + all.size());
++                        // Priority: pure SW → non-Qualcomm → empty (clean fail, no Qualcomm crash)
++                        if (!sw.isEmpty()) return sw;
++                        if (!nonQti.isEmpty()) return nonQti;
++                        return new ArrayList<>();
++                    }
 +                }
-+            }
-+            return sw.isEmpty() ? all : sw;
++            );
 +        }
-+    }
-+);
-+}
  
          DefaultMediaSourceFactory mediaSourceFactory;
-         
