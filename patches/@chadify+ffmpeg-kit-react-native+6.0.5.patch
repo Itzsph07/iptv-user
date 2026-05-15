@@ -1,11 +1,11 @@
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt b/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
-index e9cf5ab..c9cbb1f 100644
+index e9cf5ab..147665d 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
 @@ -84,6 +84,9 @@ class Source {
       */
      var bufferConfig = BufferConfig()
-     
+ 
 +    @JvmField
 +    var useSoftwareDecoder: Boolean = false
 +
@@ -31,7 +31,7 @@ index e9cf5ab..c9cbb1f 100644
              val propSrcHeadersArray = safeGetArray(src, PROP_SRC_HEADERS)
              if (propSrcHeadersArray != null) {
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-index e16ac96..cd24116 100644
+index e16ac96..8804da1 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 @@ -81,6 +81,7 @@ import androidx.media3.exoplayer.ima.ImaServerSideAdInsertionMediaSource;
@@ -50,17 +50,18 @@ index e16ac96..cd24116 100644
  
      private boolean showNotificationControls = false;
      // \ End props
-@@ -713,6 +715,9 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -713,6 +715,10 @@ public class ReactExoplayerView extends FrameLayout implements
      }
  
      private void initializePlayerCore(ReactExoplayerView self) {
 +        android.util.Log.w("DECODER_DEBUG", "🔧 useSoftwareDecoder = " + source.useSoftwareDecoder); 
-+        playerBuiltWithSoftwareDecoder = source.useSoftwareDecoder;    
++        playerBuiltWithSoftwareDecoder = source.useSoftwareDecoder;   
++        exoPlayerView.updateSurfaceView(source.useSoftwareDecoder ? 1 : 0); 
 +
          ExoTrackSelection.Factory videoTrackSelectionFactory = new AdaptiveTrackSelection.Factory();
          self.trackSelector = new DefaultTrackSelector(getContext(), videoTrackSelectionFactory);
          self.trackSelector.setParameters(trackSelector.buildUponParameters()
-@@ -730,11 +735,35 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -730,11 +736,43 @@ public class ReactExoplayerView extends FrameLayout implements
              this.bandwidthMeter = config.getBandwidthMeter();
          }
  
@@ -80,28 +81,46 @@ index e16ac96..cd24116 100644
 +
 +// If software decoder mode, filter out Qualcomm hardware decoders
 +if (source.useSoftwareDecoder) {
-+renderersFactory.setMediaCodecSelector(
-+    new MediaCodecSelector() {
-+        @Override
-+        public List<MediaCodecInfo> getDecoderInfos(String mimeType, boolean requiresSecureDecoder, boolean requiresTunnelingDecoder) throws MediaCodecUtil.DecoderQueryException {
-+            List<MediaCodecInfo> all = MediaCodecUtil.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder);
-+            List<MediaCodecInfo> sw = new ArrayList<>();
-+            for (MediaCodecInfo info : all) {
-+                String n = info.name == null ? "" : info.name.toLowerCase();
-+                // Software-only allow-list: Google's c2.android.* + legacy OMX.google.*
-+                if (n.startsWith("c2.android.") || n.startsWith("omx.google.") || n.contains(".sw.")) {
-+                    sw.add(info);
++    renderersFactory.setMediaCodecSelector(
++        new MediaCodecSelector() {
++            @Override
++            public List<MediaCodecInfo> getDecoderInfos(String mimeType, boolean requiresSecureDecoder, boolean requiresTunnelingDecoder) throws MediaCodecUtil.DecoderQueryException {
++                List<MediaCodecInfo> all = MediaCodecUtil.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder);
++                List<MediaCodecInfo> filtered = new ArrayList<>();
++                for (MediaCodecInfo info : all) {
++                    String n = info.name == null ? "" : info.name.toLowerCase();
++                    // Block known Qualcomm/hardware-only decoders, allow everything else
++                    boolean isBlockedHW = n.contains("c2.qti.") 
++                        || n.contains("omx.qcom.") 
++                        || n.contains("omx.ittiam.")
++                        || n.contains("omx.mtk.");   // also block MediaTek HW
++                    if (!isBlockedHW) {
++                        filtered.add(info);
++                        android.util.Log.w("DECODER_DEBUG", "✅ SW mode allowing: " + info.name);
++                    } else {
++                        android.util.Log.w("DECODER_DEBUG", "🚫 SW mode blocking: " + info.name);
++                    }
 +                }
++                // Fallback to all if nothing survives the filter (safety net)
++                return filtered.isEmpty() ? all : filtered;
 +            }
-+            return sw.isEmpty() ? all : sw;
 +        }
-+    }
-+);
++    );
 +}
  
          DefaultMediaSourceFactory mediaSourceFactory;
          
-@@ -2063,6 +2092,9 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -1226,8 +1264,8 @@ public class ReactExoplayerView extends FrameLayout implements
+             }
+ 
+             updateResumePosition();
+-            player.release();
+             player.removeListener(this);
++            player.release();
+             PictureInPictureUtil.applyAutoEnterEnabled(themedReactContext, pictureInPictureParamsBuilder, false);
+             if (pipListenerUnsubscribe != null) {
+                 pipListenerUnsubscribe.run();
+@@ -2063,6 +2101,9 @@ public class ReactExoplayerView extends FrameLayout implements
              if (!isSourceEqual) {
                  hasVideoEnded = false;
                  playerNeedsSource = true;
