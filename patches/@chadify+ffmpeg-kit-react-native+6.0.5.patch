@@ -130,3 +130,27 @@ index e16ac96..8804da1 100644
                  initializePlayer();
              }
          } else {
+diff --git a/node_modules/react-native-video/lib/Video.js b/node_modules/react-native-video/lib/Video.js
+index 2dbeed3..e38c666 100644
+--- a/node_modules/react-native-video/lib/Video.js
++++ b/node_modules/react-native-video/lib/Video.js
+@@ -170,6 +170,7 @@ const Video = (0, react_1.forwardRef)(({ source, style, resizeMode, poster, post
+             textTracksAllowChunklessPreparation: resolvedSource.textTracksAllowChunklessPreparation,
+             minLoadRetryCount: _minLoadRetryCount,
+             bufferConfig: _bufferConfig,
++            useSoftwareDecoder: resolvedSource.useSoftwareDecoder ?? false,
+         };
+     }, [
+         adLanguage,
+diff --git a/node_modules/react-native-video/src/Video.tsx b/node_modules/react-native-video/src/Video.tsx
+index 789d915..b7d4c62 100644
+--- a/node_modules/react-native-video/src/Video.tsx
++++ b/node_modules/react-native-video/src/Video.tsx
+@@ -301,6 +301,7 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
+             resolvedSource.textTracksAllowChunklessPreparation,
+           minLoadRetryCount: _minLoadRetryCount,
+           bufferConfig: _bufferConfig,
++           useSoftwareDecoder: resolvedSource.useSoftwareDecoder ?? false,
+         };
+       },
+       [
