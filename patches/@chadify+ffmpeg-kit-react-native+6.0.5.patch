@@ -31,7 +31,7 @@ index e9cf5ab..147665d 100644
              val propSrcHeadersArray = safeGetArray(src, PROP_SRC_HEADERS)
              if (propSrcHeadersArray != null) {
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-index e16ac96..35a5ef9 100644
+index e16ac96..ed63469 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 @@ -81,6 +81,7 @@ import androidx.media3.exoplayer.ima.ImaServerSideAdInsertionMediaSource;
@@ -50,37 +50,18 @@ index e16ac96..35a5ef9 100644
  
      private boolean showNotificationControls = false;
      // \ End props
-@@ -558,8 +560,12 @@ public class ReactExoplayerView extends FrameLayout implements
-     }
- 
-     public void setViewType(int viewType) {
-+        if (playerBuiltWithSoftwareDecoder) {
-+            exoPlayerView.updateSurfaceView(1);
-+        } else {
-         exoPlayerView.updateSurfaceView(viewType);
--    }
-+            }
-+                }
- 
-     private class RNVLoadControl extends DefaultLoadControl {
-         private final int availableHeapInBytes;
-@@ -713,6 +719,15 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -713,6 +715,10 @@ public class ReactExoplayerView extends FrameLayout implements
      }
  
      private void initializePlayerCore(ReactExoplayerView self) {
 +        android.util.Log.w("DECODER_DEBUG", "🔧 useSoftwareDecoder = " + source.useSoftwareDecoder); 
 +        playerBuiltWithSoftwareDecoder = source.useSoftwareDecoder;   
-+        exoPlayerView.updateSurfaceView(source.useSoftwareDecoder ? 1 : 0); 
-+
-+            if (source.useSoftwareDecoder) {
-+        removeView(exoPlayerView);
-+        addView(exoPlayerView, 0, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-+    }
++         
 +
          ExoTrackSelection.Factory videoTrackSelectionFactory = new AdaptiveTrackSelection.Factory();
          self.trackSelector = new DefaultTrackSelector(getContext(), videoTrackSelectionFactory);
          self.trackSelector.setParameters(trackSelector.buildUponParameters()
-@@ -730,11 +745,43 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -730,11 +736,43 @@ public class ReactExoplayerView extends FrameLayout implements
              this.bandwidthMeter = config.getBandwidthMeter();
          }
  
@@ -129,21 +110,7 @@ index e16ac96..35a5ef9 100644
  
          DefaultMediaSourceFactory mediaSourceFactory;
          
-@@ -756,6 +803,13 @@ public class ReactExoplayerView extends FrameLayout implements
-                 .setLoadControl(loadControl)
-                 .setMediaSourceFactory(mediaSourceFactory)
-                 .build();
-+
-+        // ★ FOR SOFTWARE DECODER: Clear video surface so ExoPlayer uses TextureView ★
-+
-+         if (source.useSoftwareDecoder) {
-+         player.setVideoSurface(null);
-+         player.setVideoTextureView(exoPlayerView.getVideoTextureView());
-+}
-         ReactNativeVideoManager.Companion.getInstance().onInstanceCreated(instanceId, player);
-         refreshDebugState();
-         player.addListener(self);
-@@ -1226,8 +1280,8 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -1226,8 +1264,8 @@ public class ReactExoplayerView extends FrameLayout implements
              }
  
              updateResumePosition();
@@ -153,7 +120,7 @@ index e16ac96..35a5ef9 100644
              PictureInPictureUtil.applyAutoEnterEnabled(themedReactContext, pictureInPictureParamsBuilder, false);
              if (pipListenerUnsubscribe != null) {
                  pipListenerUnsubscribe.run();
-@@ -2063,6 +2117,9 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -2063,6 +2101,9 @@ public class ReactExoplayerView extends FrameLayout implements
              if (!isSourceEqual) {
                  hasVideoEnded = false;
                  playerNeedsSource = true;
@@ -176,7 +143,7 @@ index 2dbeed3..e38c666 100644
      }, [
          adLanguage,
 diff --git a/node_modules/react-native-video/src/Video.tsx b/node_modules/react-native-video/src/Video.tsx
-index 789d915..b7d4c62 100644
+index 789d915..b3c37bd 100644
 --- a/node_modules/react-native-video/src/Video.tsx
 +++ b/node_modules/react-native-video/src/Video.tsx
 @@ -301,6 +301,7 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
@@ -187,3 +154,18 @@ index 789d915..b7d4c62 100644
          };
        },
        [
+@@ -795,8 +796,13 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
+         return ViewType.TEXTURE;
+       }
+ 
++  // ★ ADD: force TextureView when source requests software decoder
++  if ((source as ReactVideoSource)?.useSoftwareDecoder) {
++    return ViewType.TEXTURE;
++  }
++
+       return ViewType.SURFACE;
+-    }, [drm, useSecureView, useTextureView, viewType]);
++    }, [drm, useSecureView, useTextureView, viewType, source]);
+ 
+     const _renderPoster = useCallback(() => {
+       if (!hasPoster || !showPoster) {
