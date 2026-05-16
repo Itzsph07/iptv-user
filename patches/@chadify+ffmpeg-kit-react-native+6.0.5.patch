@@ -31,7 +31,7 @@ index e9cf5ab..147665d 100644
              val propSrcHeadersArray = safeGetArray(src, PROP_SRC_HEADERS)
              if (propSrcHeadersArray != null) {
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-index e16ac96..ed63469 100644
+index e16ac96..c09de2c 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 @@ -81,6 +81,7 @@ import androidx.media3.exoplayer.ima.ImaServerSideAdInsertionMediaSource;
@@ -110,7 +110,52 @@ index e16ac96..ed63469 100644
  
          DefaultMediaSourceFactory mediaSourceFactory;
          
-@@ -1226,8 +1264,8 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -777,6 +815,7 @@ public class ReactExoplayerView extends FrameLayout implements
+         }
+     }
+     
++
+     private AdsMediaSource initializeAds(MediaSource videoSource, Source runningSource) {
+         AdsProps adProps = runningSource.getAdsProps();
+         Uri uri = runningSource.getUri();
+@@ -1074,22 +1113,23 @@ public class ReactExoplayerView extends FrameLayout implements
+                         buildDataSourceFactory(false)
+                 );
+                 break;
+-            case CONTENT_TYPE_HLS:
+-                if (!BuildConfig.USE_EXOPLAYER_HLS) {
+-                    DebugLog.e("Exo Player Exception", "HLS is not enabled!");
+-                    throw new IllegalStateException("HLS is not enabled!");
+-                }
++case CONTENT_TYPE_HLS:
++    if (!BuildConfig.USE_EXOPLAYER_HLS) {
++        DebugLog.e("Exo Player Exception", "HLS is not enabled!");
++        throw new IllegalStateException("HLS is not enabled!");
++    }
+ 
+-                DataSource.Factory dataSourceFactory = mediaDataSourceFactory;
++    DataSource.Factory dataSourceFactory = mediaDataSourceFactory;
+ 
+-                if (useCache && !disableCache) {
+-                    dataSourceFactory = RNVSimpleCache.INSTANCE.getCacheFactory(buildHttpDataSourceFactory(true));
+-                }
++    if (useCache && !disableCache) {
++        dataSourceFactory = RNVSimpleCache.INSTANCE.getCacheFactory(buildHttpDataSourceFactory(true));
++    }
+ 
+-                mediaSourceFactory = new HlsMediaSource.Factory(
+-                        dataSourceFactory
+-                ).setAllowChunklessPreparation(source.getTextTracksAllowChunklessPreparation());
+-                break;
++    HlsMediaSource.Factory hlsFactory = new HlsMediaSource.Factory(dataSourceFactory)
++            .setAllowChunklessPreparation(source.getTextTracksAllowChunklessPreparation());
++    
++    mediaSourceFactory = hlsFactory;
++    break;
+             case CONTENT_TYPE_OTHER:
+                 if ("asset".equals(uri.getScheme())) {
+                     try {
+@@ -1226,8 +1266,8 @@ public class ReactExoplayerView extends FrameLayout implements
              }
  
              updateResumePosition();
@@ -120,7 +165,7 @@ index e16ac96..ed63469 100644
              PictureInPictureUtil.applyAutoEnterEnabled(themedReactContext, pictureInPictureParamsBuilder, false);
              if (pipListenerUnsubscribe != null) {
                  pipListenerUnsubscribe.run();
-@@ -2063,6 +2101,9 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -2063,6 +2103,9 @@ public class ReactExoplayerView extends FrameLayout implements
              if (!isSourceEqual) {
                  hasVideoEnded = false;
                  playerNeedsSource = true;
@@ -131,7 +176,7 @@ index e16ac96..ed63469 100644
              }
          } else {
 diff --git a/node_modules/react-native-video/lib/Video.js b/node_modules/react-native-video/lib/Video.js
-index 2dbeed3..e246936 100644
+index 2dbeed3..50bf756 100644
 --- a/node_modules/react-native-video/lib/Video.js
 +++ b/node_modules/react-native-video/lib/Video.js
 @@ -170,6 +170,7 @@ const Video = (0, react_1.forwardRef)(({ source, style, resizeMode, poster, post
@@ -147,17 +192,17 @@ index 2dbeed3..e246936 100644
              return types_1.ViewType.TEXTURE;
          }
 +            if ((source === null || source === void 0 ? void 0 : source.useSoftwareDecoder)) {
-+        return types_1.ViewType.TEXTURE;
-+    }
-+
          return types_1.ViewType.SURFACE;
 -    }, [drm, useSecureView, useTextureView, viewType]);
++    }
++
++        return types_1.ViewType.SURFACE;
 +    }, [drm, useSecureView, useTextureView, viewType, source]);
      const _renderPoster = (0, react_1.useCallback)(() => {
          if (!hasPoster || !showPoster) {
              return null;
 diff --git a/node_modules/react-native-video/src/Video.tsx b/node_modules/react-native-video/src/Video.tsx
-index 789d915..b3c37bd 100644
+index 789d915..17ef2a5 100644
 --- a/node_modules/react-native-video/src/Video.tsx
 +++ b/node_modules/react-native-video/src/Video.tsx
 @@ -301,6 +301,7 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
@@ -174,7 +219,7 @@ index 789d915..b3c37bd 100644
  
 +  // ★ ADD: force TextureView when source requests software decoder
 +  if ((source as ReactVideoSource)?.useSoftwareDecoder) {
-+    return ViewType.TEXTURE;
++    return ViewType.SURFACE;
 +  }
 +
        return ViewType.SURFACE;
