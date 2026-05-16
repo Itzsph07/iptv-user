@@ -1,3 +1,14 @@
+diff --git a/node_modules/react-native-video/android/build.gradle b/node_modules/react-native-video/android/build.gradle
+--- a/node_modules/react-native-video/android/build.gradle
++++ b/node_modules/react-native-video/android/build.gradle
+@@ -107,6 +107,7 @@ dependencies {
+     implementation "androidx.media3:media3-ui:${media3Version}"
+     implementation "androidx.media3:media3-session:${media3Version}"
+     implementation "androidx.media3:media3-datasource-okhttp:${media3Version}"
++    implementation "io.github.anilbeesetti:nextlib-media3ext:1.10.0-0.12.1"
+ 
+     if (useExoplayerIMA) {
+         implementation "androidx.media3:media3-exoplayer-ima:${media3Version}"
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt b/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
 index e9cf5ab..147665d 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
