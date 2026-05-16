@@ -31,7 +31,7 @@ index e9cf5ab..147665d 100644
              val propSrcHeadersArray = safeGetArray(src, PROP_SRC_HEADERS)
              if (propSrcHeadersArray != null) {
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-index e16ac96..419ff21 100644
+index e16ac96..de5b812 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 @@ -81,6 +81,7 @@ import androidx.media3.exoplayer.ima.ImaServerSideAdInsertionMediaSource;
@@ -69,7 +69,7 @@ index e16ac96..419ff21 100644
          ExoTrackSelection.Factory videoTrackSelectionFactory = new AdaptiveTrackSelection.Factory();
          self.trackSelector = new DefaultTrackSelector(getContext(), videoTrackSelectionFactory);
          self.trackSelector.setParameters(trackSelector.buildUponParameters()
-@@ -730,11 +744,43 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -730,11 +744,20 @@ public class ReactExoplayerView extends FrameLayout implements
              this.bandwidthMeter = config.getBandwidthMeter();
          }
  
@@ -78,47 +78,24 @@ index e16ac96..419ff21 100644
 -                        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
 -                        .setEnableDecoderFallback(true)
 -                        .forceEnableMediaCodecAsynchronousQueueing();
-+DefaultRenderersFactory renderersFactory =
-+    new DefaultRenderersFactory(getContext())
-+        .setExtensionRendererMode(
-+            source.useSoftwareDecoder
-+                ? DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
-+                : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
-+        )
-+        .setEnableDecoderFallback(true);
-+
-+// If software decoder mode, filter out Qualcomm hardware decoders
++// Replace DefaultRenderersFactory with NextRenderersFactory when SW mode is on
++// NextRenderersFactory adds FFmpeg-based audio + video decoders (libavc, libhevc, libvpx)
++DefaultRenderersFactory renderersFactory;
 +if (source.useSoftwareDecoder) {
-+    renderersFactory.setMediaCodecSelector(
-+        new MediaCodecSelector() {
-+            @Override
-+            public List<MediaCodecInfo> getDecoderInfos(String mimeType, boolean requiresSecureDecoder, boolean requiresTunnelingDecoder) throws MediaCodecUtil.DecoderQueryException {
-+                List<MediaCodecInfo> all = MediaCodecUtil.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder);
-+                List<MediaCodecInfo> filtered = new ArrayList<>();
-+                for (MediaCodecInfo info : all) {
-+                    String n = info.name == null ? "" : info.name.toLowerCase();
-+                    // Block known Qualcomm/hardware-only decoders, allow everything else
-+                    boolean isBlockedHW = n.contains("c2.qti.") 
-+                        || n.contains("omx.qcom.") 
-+                        || n.contains("omx.ittiam.")
-+                        || n.contains("omx.mtk.");   // also block MediaTek HW
-+                    if (!isBlockedHW) {
-+                        filtered.add(info);
-+                        android.util.Log.w("DECODER_DEBUG", "✅ SW mode allowing: " + info.name);
-+                    } else {
-+                        android.util.Log.w("DECODER_DEBUG", "🚫 SW mode blocking: " + info.name);
-+                    }
-+                }
-+                // Fallback to all if nothing survives the filter (safety net)
-+                return filtered.isEmpty() ? all : filtered;
-+            }
-+        }
-+    );
++    renderersFactory = new io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory(getContext())
++        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
++        .setEnableDecoderFallback(true);
++    android.util.Log.w("DECODER_DEBUG", "🎯 Using NextRenderersFactory (FFmpeg SW)");
++} else {
++    renderersFactory = new DefaultRenderersFactory(getContext())
++        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
++        .setEnableDecoderFallback(true)
++        .forceEnableMediaCodecAsynchronousQueueing();
 +}
  
          DefaultMediaSourceFactory mediaSourceFactory;
          
-@@ -777,6 +823,7 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -777,6 +800,7 @@ public class ReactExoplayerView extends FrameLayout implements
          }
      }
      
@@ -126,7 +103,7 @@ index e16ac96..419ff21 100644
      private AdsMediaSource initializeAds(MediaSource videoSource, Source runningSource) {
          AdsProps adProps = runningSource.getAdsProps();
          Uri uri = runningSource.getUri();
-@@ -1074,22 +1121,23 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -1074,22 +1098,23 @@ public class ReactExoplayerView extends FrameLayout implements
                          buildDataSourceFactory(false)
                  );
                  break;
@@ -163,7 +140,7 @@ index e16ac96..419ff21 100644
              case CONTENT_TYPE_OTHER:
                  if ("asset".equals(uri.getScheme())) {
                      try {
-@@ -1226,8 +1274,8 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -1226,8 +1251,8 @@ public class ReactExoplayerView extends FrameLayout implements
              }
  
              updateResumePosition();
@@ -173,7 +150,7 @@ index e16ac96..419ff21 100644
              PictureInPictureUtil.applyAutoEnterEnabled(themedReactContext, pictureInPictureParamsBuilder, false);
              if (pipListenerUnsubscribe != null) {
                  pipListenerUnsubscribe.run();
-@@ -2063,6 +2111,9 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -2063,6 +2088,9 @@ public class ReactExoplayerView extends FrameLayout implements
              if (!isSourceEqual) {
                  hasVideoEnded = false;
                  playerNeedsSource = true;
