@@ -31,10 +31,14 @@ index e9cf5ab..147665d 100644
              val propSrcHeadersArray = safeGetArray(src, PROP_SRC_HEADERS)
              if (propSrcHeadersArray != null) {
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-index e16ac96..de5b812 100644
+index e16ac96..1257eb6 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-@@ -81,6 +81,7 @@ import androidx.media3.exoplayer.ima.ImaServerSideAdInsertionMediaSource;
+@@ -78,9 +78,11 @@ import androidx.media3.exoplayer.drm.UnsupportedDrmException;
+ import androidx.media3.exoplayer.hls.HlsMediaSource;
+ import androidx.media3.exoplayer.ima.ImaAdsLoader;
+ import androidx.media3.exoplayer.ima.ImaServerSideAdInsertionMediaSource;
++import io.github.anilbeesetti.nextlib.media3ext.NextRenderersFactory;
  import androidx.media3.exoplayer.ima.ImaServerSideAdInsertionUriBuilder;
  import androidx.media3.exoplayer.mediacodec.MediaCodecInfo;
  import androidx.media3.exoplayer.mediacodec.MediaCodecUtil;
@@ -42,7 +46,7 @@ index e16ac96..de5b812 100644
  import androidx.media3.exoplayer.rtsp.RtspMediaSource;
  import androidx.media3.exoplayer.smoothstreaming.DefaultSsChunkSource;
  import androidx.media3.exoplayer.smoothstreaming.SsMediaSource;
-@@ -253,6 +254,7 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -253,6 +255,7 @@ public class ReactExoplayerView extends FrameLayout implements
      protected boolean playInBackground = false;
      private boolean mReportBandwidth = false;
      private boolean controls = false;
@@ -50,7 +54,7 @@ index e16ac96..de5b812 100644
  
      private boolean showNotificationControls = false;
      // \ End props
-@@ -713,6 +715,18 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -713,6 +716,18 @@ public class ReactExoplayerView extends FrameLayout implements
      }
  
      private void initializePlayerCore(ReactExoplayerView self) {
@@ -69,7 +73,7 @@ index e16ac96..de5b812 100644
          ExoTrackSelection.Factory videoTrackSelectionFactory = new AdaptiveTrackSelection.Factory();
          self.trackSelector = new DefaultTrackSelector(getContext(), videoTrackSelectionFactory);
          self.trackSelector.setParameters(trackSelector.buildUponParameters()
-@@ -730,11 +744,20 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -730,11 +745,20 @@ public class ReactExoplayerView extends FrameLayout implements
              this.bandwidthMeter = config.getBandwidthMeter();
          }
  
@@ -82,7 +86,7 @@ index e16ac96..de5b812 100644
 +// NextRenderersFactory adds FFmpeg-based audio + video decoders (libavc, libhevc, libvpx)
 +DefaultRenderersFactory renderersFactory;
 +if (source.useSoftwareDecoder) {
-+    renderersFactory = new io.github.anilbeesetti.nextlib.media3ext.ffdecoder.NextRenderersFactory(getContext())
++    renderersFactory = new io.github.anilbeesetti.nextlib.media3ext.NextRenderersFactory(getContext())
 +        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
 +        .setEnableDecoderFallback(true);
 +    android.util.Log.w("DECODER_DEBUG", "🎯 Using NextRenderersFactory (FFmpeg SW)");
@@ -95,7 +99,7 @@ index e16ac96..de5b812 100644
  
          DefaultMediaSourceFactory mediaSourceFactory;
          
-@@ -777,6 +800,7 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -777,6 +801,7 @@ public class ReactExoplayerView extends FrameLayout implements
          }
      }
      
@@ -103,7 +107,7 @@ index e16ac96..de5b812 100644
      private AdsMediaSource initializeAds(MediaSource videoSource, Source runningSource) {
          AdsProps adProps = runningSource.getAdsProps();
          Uri uri = runningSource.getUri();
-@@ -1074,22 +1098,23 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -1074,22 +1099,23 @@ public class ReactExoplayerView extends FrameLayout implements
                          buildDataSourceFactory(false)
                  );
                  break;
@@ -140,7 +144,7 @@ index e16ac96..de5b812 100644
              case CONTENT_TYPE_OTHER:
                  if ("asset".equals(uri.getScheme())) {
                      try {
-@@ -1226,8 +1251,8 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -1226,8 +1252,8 @@ public class ReactExoplayerView extends FrameLayout implements
              }
  
              updateResumePosition();
@@ -150,7 +154,7 @@ index e16ac96..de5b812 100644
              PictureInPictureUtil.applyAutoEnterEnabled(themedReactContext, pictureInPictureParamsBuilder, false);
              if (pipListenerUnsubscribe != null) {
                  pipListenerUnsubscribe.run();
-@@ -2063,6 +2088,9 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -2063,6 +2089,9 @@ public class ReactExoplayerView extends FrameLayout implements
              if (!isSourceEqual) {
                  hasVideoEnded = false;
                  playerNeedsSource = true;
