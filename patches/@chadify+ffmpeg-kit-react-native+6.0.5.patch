@@ -1,3 +1,16 @@
+diff --git a/node_modules/react-native-video/android/build.gradle b/node_modules/react-native-video/android/build.gradle
+index 748b799..f868bbb 100644
+--- a/node_modules/react-native-video/android/build.gradle
++++ b/node_modules/react-native-video/android/build.gradle
+@@ -316,4 +316,7 @@ dependencies {
+         // Common functionality used across multiple media libraries
+         implementation "androidx.media3:media3-common:$media3_version"
+     }
++
++    // Software decoder support via nextlib
++    implementation "io.github.anilbeesetti:nextlib-media3ext:1.10.0-0.12.1"
+ }
+\ No newline at end of file
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt b/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
 index e9cf5ab..147665d 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
