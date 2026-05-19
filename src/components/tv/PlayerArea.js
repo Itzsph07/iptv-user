@@ -91,8 +91,9 @@ export const PlayerArea = ({
   hideShutterView={true}
   disableFocus={true}
   addTagUrl="" 
-  useSoftwareDecoder={useSoftwareDecoder}
-  decoderPriority={useSoftwareDecoder ? "SOFTWARE" : "HARDWARE"}
+ // useTextureView={!!useSoftwareDecoder}
+ // useSoftwareDecoder={useSoftwareDecoder}
+  //decoderPriority={useSoftwareDecoder ? "SOFTWARE" : "HARDWARE"}
   bufferConfig={{
     minBufferMs: 15000,
     maxBufferMs: 50000,
