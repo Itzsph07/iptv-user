@@ -177,7 +177,7 @@ android {
 
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
-    implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
+    implementation 'io.github.anilbeesetti:nextlib-media3ext:1.10.0-0.12.1'
     implementation("com.facebook.react:react-android")
         
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
