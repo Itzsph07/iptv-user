@@ -23,6 +23,10 @@ index 748b799..366861d 100644
 +    
  }
 \ No newline at end of file
+diff --git a/node_modules/react-native-video/android/libs/nextlib-media3ext-1.10.0-0.12.1.aar b/node_modules/react-native-video/android/libs/nextlib-media3ext-1.10.0-0.12.1.aar
+new file mode 100644
+index 0000000..5c81224
+Binary files /dev/null and b/node_modules/react-native-video/android/libs/nextlib-media3ext-1.10.0-0.12.1.aar differ
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt b/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
 index e9cf5ab..147665d 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
@@ -56,7 +60,7 @@ index e9cf5ab..147665d 100644
              val propSrcHeadersArray = safeGetArray(src, PROP_SRC_HEADERS)
              if (propSrcHeadersArray != null) {
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-index e16ac96..18e9e53 100644
+index e16ac96..6236a54 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 @@ -78,9 +78,11 @@ import androidx.media3.exoplayer.drm.UnsupportedDrmException;
@@ -88,41 +92,21 @@ index e16ac96..18e9e53 100644
 -        private final Runtime runtime;
 -        public RNVLoadControl(DefaultAllocator allocator, BufferConfig config) {
 -            super(allocator,
-+private class RNVLoadControl extends DefaultLoadControl {
-+    private final int availableHeapInBytes;
-+    private final Runtime runtime;
-+    
-+    public RNVLoadControl(DefaultAllocator allocator, BufferConfig config) {
-+        // Use Builder pattern for Media3 1.10.0 compatibility
-+        super(
-+            new DefaultLoadControl.Builder()
-+                .setAllocator(allocator)
-+                .setBufferDurationsMs(
-                     config.getMinBufferMs() != BufferConfig.Companion.getBufferConfigPropUnsetInt()
+-                    config.getMinBufferMs() != BufferConfig.Companion.getBufferConfigPropUnsetInt()
 -                            ? config.getMinBufferMs()
 -                            : DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
-+                        ? config.getMinBufferMs()
-+                        : DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
-                     config.getMaxBufferMs() != BufferConfig.Companion.getBufferConfigPropUnsetInt()
+-                    config.getMaxBufferMs() != BufferConfig.Companion.getBufferConfigPropUnsetInt()
 -                            ? config.getMaxBufferMs()
 -                            : DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
-+                        ? config.getMaxBufferMs()
-+                        : DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
-                     config.getBufferForPlaybackMs() != BufferConfig.Companion.getBufferConfigPropUnsetInt()
+-                    config.getBufferForPlaybackMs() != BufferConfig.Companion.getBufferConfigPropUnsetInt()
 -                            ? config.getBufferForPlaybackMs()
 -                            : DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS ,
-+                        ? config.getBufferForPlaybackMs()
-+                        : DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
-                     config.getBufferForPlaybackAfterRebufferMs() != BufferConfig.Companion.getBufferConfigPropUnsetInt()
+-                    config.getBufferForPlaybackAfterRebufferMs() != BufferConfig.Companion.getBufferConfigPropUnsetInt()
 -                            ? config.getBufferForPlaybackAfterRebufferMs()
 -                            : DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
 -                    -1,
 -                    true,
-+                        ? config.getBufferForPlaybackAfterRebufferMs()
-+                        : DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
-+                )
-+                .setBackBufferDurationMs(
-                     config.getBackBufferDurationMs() != BufferConfig.Companion.getBufferConfigPropUnsetInt()
+-                    config.getBackBufferDurationMs() != BufferConfig.Companion.getBufferConfigPropUnsetInt()
 -                            ? config.getBackBufferDurationMs()
 -                            : DefaultLoadControl.DEFAULT_BACK_BUFFER_DURATION_MS,
 -                    DefaultLoadControl.DEFAULT_RETAIN_BACK_BUFFER_FROM_KEYFRAME);
@@ -133,11 +117,36 @@ index e16ac96..18e9e53 100644
 -                    : DEFAULT_MAX_HEAP_ALLOCATION_PERCENT;
 -            availableHeapInBytes = (int) Math.floor(activityManager.getMemoryClass() * maxHeap * 1024 * 1024);
 -        }
-+                        ? config.getBackBufferDurationMs()
-+                        : DefaultLoadControl.DEFAULT_BACK_BUFFER_DURATION_MS
-+                )
-+                .setRetainBackBufferFromKeyframe(DefaultLoadControl.DEFAULT_RETAIN_BACK_BUFFER_FROM_KEYFRAME)
-+                .build()
++private class RNVLoadControl extends DefaultLoadControl {
++    private final int availableHeapInBytes;
++    private final Runtime runtime;
++    
++  public RNVLoadControl(DefaultAllocator allocator, BufferConfig config) {
++    super(
++        new DefaultLoadControl.Builder()
++            .setAllocator(allocator)
++            .setBufferDurationsMs(
++                config.getMinBufferMs() != BufferConfig.Companion.getBufferConfigPropUnsetInt()
++                    ? config.getMinBufferMs()
++                    : DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
++                config.getMaxBufferMs() != BufferConfig.Companion.getBufferConfigPropUnsetInt()
++                    ? config.getMaxBufferMs()
++                    : DefaultLoadControl.DEFAULT_MAX_BUFFER_MS,
++                config.getBufferForPlaybackMs() != BufferConfig.Companion.getBufferConfigPropUnsetInt()
++                    ? config.getBufferForPlaybackMs()
++                    : DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_MS,
++                config.getBufferForPlaybackAfterRebufferMs() != BufferConfig.Companion.getBufferConfigPropUnsetInt()
++                    ? config.getBufferForPlaybackAfterRebufferMs()
++                    : DefaultLoadControl.DEFAULT_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS
++            )
++            // REMOVE THIS ENTIRE BLOCK:
++            // .setBackBufferDurationMs(
++            //     config.getBackBufferDurationMs() != BufferConfig.Companion.getBufferConfigPropUnsetInt()
++            //         ? config.getBackBufferDurationMs()
++            //         : DefaultLoadControl.DEFAULT_BACK_BUFFER_DURATION_MS
++            // )
++            .setRetainBackBufferFromKeyframe(DefaultLoadControl.DEFAULT_RETAIN_BACK_BUFFER_FROM_KEYFRAME)
++            .build()
 +        );
          
 -        @Override
@@ -241,9 +250,9 @@ index e16ac96..18e9e53 100644
 +// NextRenderersFactory adds FFmpeg-based audio + video decoders (libavc, libhevc, libvpx)
 +DefaultRenderersFactory renderersFactory;
 +if (source.useSoftwareDecoder) {
-+    renderersFactory = new NextRenderersFactory(getContext())
-+        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
-+        .setEnableDecoderFallback(true);
++renderersFactory = new NextRenderersFactory(getContext())
++    .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
++    .setEnableDecoderFallback(true);
 +    android.util.Log.w("DECODER_DEBUG", "🎯 Using NextRenderersFactory (FFmpeg SW)");
 +} else {
 +    renderersFactory = new DefaultRenderersFactory(getContext())
