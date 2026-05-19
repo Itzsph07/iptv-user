@@ -22,6 +22,16 @@ plugins {
   id("expo-autolinking-settings")
 }
 
+dependencyResolutionManagement {
+  repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
+    repositories {
+        maven { url 'https://jitpack.io' }
+        google()
+        mavenCentral() 
+ 
+    }
+}
+
 extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
   if (System.getenv('EXPO_USE_COMMUNITY_AUTOLINKING') == '1') {
     ex.autolinkLibrariesFromCommand()
