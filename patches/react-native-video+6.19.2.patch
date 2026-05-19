@@ -1,18 +1,53 @@
+diff --git a/node_modules/react-native-video/android/build.gradle b/node_modules/react-native-video/android/build.gradle
+index 748b799..366861d 100644
+--- a/node_modules/react-native-video/android/build.gradle
++++ b/node_modules/react-native-video/android/build.gradle
+@@ -228,6 +228,11 @@ dependencies {
+     // For < 0.71, this will be from the local maven repo
+     // For > 0.71, this will be replaced by `com.facebook.react:react-android:$version` by react gradle plugin
+     //noinspection GradleDynamicVersion
++
++  // Software decoder support via nextlib
++    implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
++
++
+     implementation "com.facebook.react:react-native:+"
+ 
+     implementation "androidx.core:core-ktx:$androidxCore_version"
+@@ -316,4 +321,7 @@ dependencies {
+         // Common functionality used across multiple media libraries
+         implementation "androidx.media3:media3-common:$media3_version"
+     }
++
++  
++    
+ }
+\ No newline at end of file
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt b/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
-index e9cf5ab..b273b96 100644
+index e9cf5ab..147665d 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/common/api/Source.kt
 @@ -84,6 +84,9 @@ class Source {
       */
      var bufferConfig = BufferConfig()
-     
+ 
 +    @JvmField
 +    var useSoftwareDecoder: Boolean = false
 +
      /**
       * The list of sideLoaded text tracks
       */
-@@ -242,6 +245,7 @@ class Source {
+@@ -108,7 +111,8 @@ class Source {
+                 minLoadRetryCount == other.minLoadRetryCount &&
+                 isLocalAssetFile == other.isLocalAssetFile &&
+                 isAsset == other.isAsset &&
+-                bufferConfig == other.bufferConfig
++                bufferConfig == other.bufferConfig &&
++                useSoftwareDecoder == other.useSoftwareDecoder
+             )
+     }
+ 
+@@ -242,6 +246,7 @@ class Source {
              source.sideLoadedTextTracks = SideLoadedTextTrackList.parse(safeGetArray(src, PROP_SRC_TEXT_TRACKS))
              source.minLoadRetryCount = safeGetInt(src, PROP_SRC_MIN_LOAD_RETRY_COUNT, 3)
              source.bufferConfig = BufferConfig.parse(safeGetMap(src, PROP_SRC_BUFFER_CONFIG))
@@ -21,10 +56,14 @@ index e9cf5ab..b273b96 100644
              val propSrcHeadersArray = safeGetArray(src, PROP_SRC_HEADERS)
              if (propSrcHeadersArray != null) {
 diff --git a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-index e16ac96..e82e6ed 100644
+index e16ac96..9dc31ad 100644
 --- a/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
 +++ b/node_modules/react-native-video/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
-@@ -81,6 +81,7 @@ import androidx.media3.exoplayer.ima.ImaServerSideAdInsertionMediaSource;
+@@ -78,9 +78,11 @@ import androidx.media3.exoplayer.drm.UnsupportedDrmException;
+ import androidx.media3.exoplayer.hls.HlsMediaSource;
+ import androidx.media3.exoplayer.ima.ImaAdsLoader;
+ import androidx.media3.exoplayer.ima.ImaServerSideAdInsertionMediaSource;
++import io.github.anilbeesetti.nextlib.media3ext.NextRenderersFactory;
  import androidx.media3.exoplayer.ima.ImaServerSideAdInsertionUriBuilder;
  import androidx.media3.exoplayer.mediacodec.MediaCodecInfo;
  import androidx.media3.exoplayer.mediacodec.MediaCodecUtil;
@@ -32,7 +71,34 @@ index e16ac96..e82e6ed 100644
  import androidx.media3.exoplayer.rtsp.RtspMediaSource;
  import androidx.media3.exoplayer.smoothstreaming.DefaultSsChunkSource;
  import androidx.media3.exoplayer.smoothstreaming.SsMediaSource;
-@@ -730,11 +731,34 @@ public class ReactExoplayerView extends FrameLayout implements
+@@ -253,6 +255,7 @@ public class ReactExoplayerView extends FrameLayout implements
+     protected boolean playInBackground = false;
+     private boolean mReportBandwidth = false;
+     private boolean controls = false;
++    private boolean playerBuiltWithSoftwareDecoder = false;
+ 
+     private boolean showNotificationControls = false;
+     // \ End props
+@@ -713,6 +716,18 @@ public class ReactExoplayerView extends FrameLayout implements
+     }
+ 
+     private void initializePlayerCore(ReactExoplayerView self) {
++       playerBuiltWithSoftwareDecoder = source.useSoftwareDecoder;
++android.util.Log.w("DECODER_DEBUG", "🔧 useSoftwareDecoder = " + source.useSoftwareDecoder);
++
++// ★ Force TextureView for software decoder — SurfaceView causes first-frame stall
++// on Qualcomm devices with c2.android.avc.decoder
++if (source.useSoftwareDecoder) {
++    exoPlayerView.updateSurfaceView(1); // 1 = SURFACE_TYPE_TEXTURE_VIEW
++} else {
++    exoPlayerView.updateSurfaceView(0); // 0 = SURFACE_TYPE_SURFACE_VIEW  
++}
++         
++
+         ExoTrackSelection.Factory videoTrackSelectionFactory = new AdaptiveTrackSelection.Factory();
+         self.trackSelector = new DefaultTrackSelector(getContext(), videoTrackSelectionFactory);
+         self.trackSelector.setParameters(trackSelector.buildUponParameters()
+@@ -730,11 +745,20 @@ public class ReactExoplayerView extends FrameLayout implements
              this.bandwidthMeter = config.getBandwidthMeter();
          }
  
@@ -41,34 +107,138 @@ index e16ac96..e82e6ed 100644
 -                        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
 -                        .setEnableDecoderFallback(true)
 -                        .forceEnableMediaCodecAsynchronousQueueing();
-+DefaultRenderersFactory renderersFactory =
-+    new DefaultRenderersFactory(getContext())
-+        .setExtensionRendererMode(
-+            source.useSoftwareDecoder
-+                ? DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON
-+                : DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF
-+        )
-+        .setEnableDecoderFallback(true);
-+
-+// If software decoder mode, filter out Qualcomm hardware decoders
++// Replace DefaultRenderersFactory with NextRenderersFactory when SW mode is on
++// NextRenderersFactory adds FFmpeg-based audio + video decoders (libavc, libhevc, libvpx)
++DefaultRenderersFactory renderersFactory;
 +if (source.useSoftwareDecoder) {
-+    renderersFactory.setMediaCodecSelector(
-+        new MediaCodecSelector() {
-+            @Override
-+            public List<MediaCodecInfo> getDecoderInfos(String mimeType, boolean requiresSecureDecoder, boolean requiresTunnelingDecoder) throws MediaCodecUtil.DecoderQueryException {
-+                List<MediaCodecInfo> allDecoders = MediaCodecUtil.getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder);
-+                List<MediaCodecInfo> filtered = new ArrayList<>();
-+                for (MediaCodecInfo info : allDecoders) {
-+                    String name = info.name != null ? info.name.toLowerCase() : "";
-+                    if (!name.contains("qti") && !name.contains("qcom")) {
-+                        filtered.add(info);
-+                    }
-+                }
-+                return filtered.isEmpty() ? allDecoders : filtered;
-+            }
-+        }
-+    );
++    renderersFactory = new NextRenderersFactory(getContext())
++        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
++        .setEnableDecoderFallback(true);
++    android.util.Log.w("DECODER_DEBUG", "🎯 Using NextRenderersFactory (FFmpeg SW)");
++} else {
++    renderersFactory = new DefaultRenderersFactory(getContext())
++        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_OFF)
++        .setEnableDecoderFallback(true)
++        .forceEnableMediaCodecAsynchronousQueueing();
 +}
  
          DefaultMediaSourceFactory mediaSourceFactory;
          
+@@ -777,6 +801,7 @@ public class ReactExoplayerView extends FrameLayout implements
+         }
+     }
+     
++
+     private AdsMediaSource initializeAds(MediaSource videoSource, Source runningSource) {
+         AdsProps adProps = runningSource.getAdsProps();
+         Uri uri = runningSource.getUri();
+@@ -1074,22 +1099,23 @@ public class ReactExoplayerView extends FrameLayout implements
+                         buildDataSourceFactory(false)
+                 );
+                 break;
+-            case CONTENT_TYPE_HLS:
+-                if (!BuildConfig.USE_EXOPLAYER_HLS) {
+-                    DebugLog.e("Exo Player Exception", "HLS is not enabled!");
+-                    throw new IllegalStateException("HLS is not enabled!");
+-                }
++case CONTENT_TYPE_HLS:
++    if (!BuildConfig.USE_EXOPLAYER_HLS) {
++        DebugLog.e("Exo Player Exception", "HLS is not enabled!");
++        throw new IllegalStateException("HLS is not enabled!");
++    }
+ 
+-                DataSource.Factory dataSourceFactory = mediaDataSourceFactory;
++    DataSource.Factory dataSourceFactory = mediaDataSourceFactory;
+ 
+-                if (useCache && !disableCache) {
+-                    dataSourceFactory = RNVSimpleCache.INSTANCE.getCacheFactory(buildHttpDataSourceFactory(true));
+-                }
++    if (useCache && !disableCache) {
++        dataSourceFactory = RNVSimpleCache.INSTANCE.getCacheFactory(buildHttpDataSourceFactory(true));
++    }
+ 
+-                mediaSourceFactory = new HlsMediaSource.Factory(
+-                        dataSourceFactory
+-                ).setAllowChunklessPreparation(source.getTextTracksAllowChunklessPreparation());
+-                break;
++    HlsMediaSource.Factory hlsFactory = new HlsMediaSource.Factory(dataSourceFactory)
++            .setAllowChunklessPreparation(source.getTextTracksAllowChunklessPreparation());
++    
++    mediaSourceFactory = hlsFactory;
++    break;
+             case CONTENT_TYPE_OTHER:
+                 if ("asset".equals(uri.getScheme())) {
+                     try {
+@@ -1226,8 +1252,8 @@ public class ReactExoplayerView extends FrameLayout implements
+             }
+ 
+             updateResumePosition();
+-            player.release();
+             player.removeListener(this);
++            player.release();
+             PictureInPictureUtil.applyAutoEnterEnabled(themedReactContext, pictureInPictureParamsBuilder, false);
+             if (pipListenerUnsubscribe != null) {
+                 pipListenerUnsubscribe.run();
+@@ -2063,6 +2089,9 @@ public class ReactExoplayerView extends FrameLayout implements
+             if (!isSourceEqual) {
+                 hasVideoEnded = false;
+                 playerNeedsSource = true;
++                 if (player != null && source.useSoftwareDecoder != playerBuiltWithSoftwareDecoder) {
++                releasePlayer(); 
++                 }
+                 initializePlayer();
+             }
+         } else {
+diff --git a/node_modules/react-native-video/lib/Video.js b/node_modules/react-native-video/lib/Video.js
+index 2dbeed3..e246936 100644
+--- a/node_modules/react-native-video/lib/Video.js
++++ b/node_modules/react-native-video/lib/Video.js
+@@ -170,6 +170,7 @@ const Video = (0, react_1.forwardRef)(({ source, style, resizeMode, poster, post
+             textTracksAllowChunklessPreparation: resolvedSource.textTracksAllowChunklessPreparation,
+             minLoadRetryCount: _minLoadRetryCount,
+             bufferConfig: _bufferConfig,
++            useSoftwareDecoder: resolvedSource.useSoftwareDecoder ?? false,
+         };
+     }, [
+         adLanguage,
+@@ -468,8 +469,12 @@ const Video = (0, react_1.forwardRef)(({ source, style, resizeMode, poster, post
+         if (useTextureView) {
+             return types_1.ViewType.TEXTURE;
+         }
++            if ((source === null || source === void 0 ? void 0 : source.useSoftwareDecoder)) {
++        return types_1.ViewType.TEXTURE;
++    }
++
+         return types_1.ViewType.SURFACE;
+-    }, [drm, useSecureView, useTextureView, viewType]);
++    }, [drm, useSecureView, useTextureView, viewType, source]);
+     const _renderPoster = (0, react_1.useCallback)(() => {
+         if (!hasPoster || !showPoster) {
+             return null;
+diff --git a/node_modules/react-native-video/src/Video.tsx b/node_modules/react-native-video/src/Video.tsx
+index 789d915..b3c37bd 100644
+--- a/node_modules/react-native-video/src/Video.tsx
++++ b/node_modules/react-native-video/src/Video.tsx
+@@ -301,6 +301,7 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
+             resolvedSource.textTracksAllowChunklessPreparation,
+           minLoadRetryCount: _minLoadRetryCount,
+           bufferConfig: _bufferConfig,
++           useSoftwareDecoder: resolvedSource.useSoftwareDecoder ?? false,
+         };
+       },
+       [
+@@ -795,8 +796,13 @@ const Video = forwardRef<VideoRef, ReactVideoProps>(
+         return ViewType.TEXTURE;
+       }
+ 
++  // ★ ADD: force TextureView when source requests software decoder
++  if ((source as ReactVideoSource)?.useSoftwareDecoder) {
++    return ViewType.TEXTURE;
++  }
++
+       return ViewType.SURFACE;
+-    }, [drm, useSecureView, useTextureView, viewType]);
++    }, [drm, useSecureView, useTextureView, viewType, source]);
+ 
+     const _renderPoster = useCallback(() => {
+       if (!hasPoster || !showPoster) {
