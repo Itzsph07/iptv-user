@@ -62,12 +62,12 @@ export const useStreamPlayer = () => {
   }, []);
 
   // Reload when software decoder setting changes
-  useEffect(() => {
-    console.log(`🔀 Decoder: ${settings.forceSoftwareDecoder ? 'SOFTWARE (ExoPlayer)' : 'HARDWARE'}`);
-    if (currentChannelRef.current) {
-      setTimeout(() => loadStream(currentChannelRef.current), 100);
-    }
-  }, [settings.forceSoftwareDecoder]);
+ // useEffect(() => /*/{
+   // console.log(`🔀 Decoder: ${settings.forceSoftwareDecoder ? 'SOFTWARE (ExoPlayer)' : 'HARDWARE'}`);
+    //if (currentChannelRef.current) {
+     // setTimeout(() => loadStream(currentChannelRef.current), 100);
+    //}
+  //},*/ [settings.forceSoftwareDecoder]);
 
   const loadStream = useCallback(async (channel) => {
     if (!channel) return;
@@ -144,10 +144,12 @@ export const useStreamPlayer = () => {
       // ★ SOFTWARE DECODER MODE - ExoPlayer with useTextureView=true ★
       // ===================================================================
       if (swDec) {
-        console.log('🎬 SOFTWARE DECODER MODE - ExoPlayer');
+          console.log('🎬 SW BRANCH HIT, sending useSoftwareDecoder:true');
+
         setUsingProxy(false);
         setStreamSource({ 
           uri: plain,
+          useSoftwareDecoder: true,
           headers: { 
             'User-Agent': 'Lavf53.32.100',
             'Connection': 'keep-alive'
@@ -171,12 +173,17 @@ export const useStreamPlayer = () => {
 
         console.log(`📺 PROXY MODE (SERVER)`);
         setUsingProxy(true);
-        setStreamSource({ uri: proxyUri });
+        setStreamSource({ uri: proxyUri,
+          useSoftwareDecoder: swDec,
+         });
+        
       } else {
         // DIRECT MODE
         console.log(`📺 DIRECT MODE`);
         setUsingProxy(false);
-        setStreamSource({ uri: plain });
+        setStreamSource({ uri: plain,
+          useSoftwareDecoder: swDec,
+         });
       }
 
       setVideoKey(k => k + 1);
