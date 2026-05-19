@@ -14,10 +14,11 @@ buildscript {
 
 allprojects {
   repositories {
-    google()
     mavenCentral()
+    google()
     maven { url 'https://www.jitpack.io' }
   }
 }
+
 
 apply plugin: "expo-root-project"
