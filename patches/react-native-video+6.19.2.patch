@@ -1,5 +1,5 @@
 diff --git a/node_modules/react-native-video/android/build.gradle b/node_modules/react-native-video/android/build.gradle
-index 748b799..366861d 100644
+index 748b799..7789d00 100644
 --- a/node_modules/react-native-video/android/build.gradle
 +++ b/node_modules/react-native-video/android/build.gradle
 @@ -228,6 +228,11 @@ dependencies {
@@ -8,7 +8,7 @@ index 748b799..366861d 100644
      //noinspection GradleDynamicVersion
 +
 +  // Software decoder support via nextlib
-+    implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
++  implementation 'io.github.anilbeesetti:nextlib-media3ext:1.10.0-0.12.1'
 +
 +
      implementation "com.facebook.react:react-native:+"
