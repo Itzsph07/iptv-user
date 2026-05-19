@@ -25,6 +25,9 @@
       "minSdkVersion": 24,
       "targetSdkVersion": 35,
       "compileSdkVersion": 35,
+      "buildToolsVersion": "35.0.0",
+      "newArchEnabled": false,
+      "agpVersion": "8.9.0",
       "adaptiveIcon": {
         "foregroundImage": "./assets/mesaIPTV.png",
         "backgroundColor": "#000000"
@@ -79,13 +82,20 @@
     },
     "extra": {
       "eas": {
-        "projectId": "51e79fbc-a520-4f0d-9728-3f206a9ccc72"
+        "projectId": "62895f48-7736-48a5-a8c3-cc4c24f6e7c1"
       }
     },
     "runtimeVersion": "1.0.0",
     "updates": {},
     "plugins": [
-      "expo-build-properties",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "newArchEnabled": false
+          }
+        }
+      ],
       [
         "@react-native-tvos/config-tv",
         {
@@ -110,6 +120,6 @@
       ],
       "expo-font"
     ],
-    "owner": "ggbosi"
+    "owner": "mesashop01"
   }
 }
