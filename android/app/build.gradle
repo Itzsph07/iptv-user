@@ -4,6 +4,29 @@ apply plugin: "com.facebook.react"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
+// ========== DEBUG: Check if AAR file exists ==========
+def aarFile = file('libs/nextlib-media3ext-1.10.0-0.12.1.aar')
+println "========================================="
+println "🔍 DEBUG: Checking for AAR file"
+println "Looking for: libs/nextlib-media3ext-1.10.0-0.12.1.aar"
+if (aarFile.exists()) {
+    println "✅ AAR FOUND at: ${aarFile.absolutePath}"
+    println "   File size: ${aarFile.length()} bytes"
+} else {
+    println "❌ AAR NOT FOUND at: ${aarFile.absolutePath}"
+    def libsDir = file('libs')
+    if (libsDir.exists()) {
+        println "   Contents of libs directory:"
+        libsDir.eachFile { f ->
+            println "     - ${f.name}"
+        }
+    } else {
+        println "   libs directory does NOT exist!"
+    }
+}
+println "========================================="
+// ========== END DEBUG ==========
+
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
@@ -154,7 +177,9 @@ android {
 
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
+    implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
     implementation("com.facebook.react:react-android")
+        
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
     def isWebpAnimatedEnabled = (findProperty('expo.webp.animated') ?: "") == "true";
